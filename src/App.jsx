@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 
-const MAKE_WEBHOOK_URL = ""; 
+const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/wspm7jsje8f3vn34ug547uy3irc1bk26"; 
 // Make Webhook 연결 후 위 따옴표 안에 Webhook URL을 넣으세요.
 // 예: const MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/xxxxxxx";
 
