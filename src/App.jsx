@@ -1,472 +1,2830 @@
-
-import React, { useMemo, useState, useEffect } from "react";
-import { createRoot } from "react-dom/client";
-import { motion } from "framer-motion";
-import { QRCodeCanvas } from "qrcode.react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  QrCode, MapPin, Clock, Camera, CheckCircle2, AlertTriangle,
-  ClipboardCheck, Send, Building2, UserRound, FileText, ShieldCheck,
-  ArrowRight, Link as LinkIcon, RotateCcw
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  Camera,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Circle,
+  ClipboardList,
+  Clock,
+  Download,
+  FileText,
+  Hospital,
+  ImagePlus,
+  LogIn,
+  LogOut,
+  MapPin,
+  Mic,
+  MicOff,
+  Plus,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  ThumbsUp,
+  UserRound,
+  Wrench,
+  X,
 } from "lucide-react";
-import "./style.css";
 
-const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/wspm7jsje8f3vn34ug547uy3irc1bk26"; 
-// Make Webhook 연결 후 위 따옴표 안에 Webhook URL을 넣으세요.
-// 예: const MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/xxxxxxx";
+/* ─────────────────────────────────────────────
+   브랜드 / 디자인 토큰
+   ───────────────────────────────────────────── */
+const KB = {
+  navy: "#1E2761",
+  navyDeep: "#141B47",
+  navyLight: "#2A3573",
+  navyMute: "#4A5396",
+  gold: "#C9A961",
+  goldLight: "#E5D3A1",
+  goldMute: "#F5EBD3",
+  cream: "#FAF7F0",
+  bg: "#F6F4EE",
+  ink: "#1A1F3A",
+  inkSoft: "#4B5274",
+  inkMute: "#8A8FA8",
+  line: "#E8E3D6",
+  ok: "#1F9D6E",
+  okSoft: "#E6F4EE",
+  warn: "#D97706",
+  warnSoft: "#FEF3E2",
+  bad: "#C2410C",
+  badSoft: "#FCE8DC",
+};
 
-const FIELD_SITES = [
-  {
-    id: "reto_clinic",
-    name: "리투의원",
-    type: "병원 정기청소",
-    address: "서울 강남구 청담동",
-    worker: "지용",
-    requiredCloseTime: "09:30 전 마감",
-    priority: "높음",
-    repeatedIssues: ["6층 관리실 거울", "세면대 선반", "출입문 유리", "파우더룸", "창틀 날파리", "원장실 쇼파 밑", "환자 베드 밑"],
-  },
-  {
-    id: "heisa_crossfit",
-    name: "HEISA 크로스핏",
-    type: "피트니스 정기청소",
-    address: "서울 서초구 사평대로26길 8",
-    worker: "담당자",
-    requiredCloseTime: "토요일 오후 작업",
-    priority: "보통",
-    repeatedIssues: ["남녀 탈의실", "화장실", "리커버리룸", "야외 테라스", "검정 매트 바닥"],
-  },
-];
-
-const PHOTO_POINTS = {
-  reto_clinic: [
-    { key: "arrival", label: "출근 도착 사진", required: true, note: "입구 또는 지정 위치" },
-    { key: "lobby", label: "로비/대기실 완료", required: true, note: "첫인상 구역" },
-    { key: "glass", label: "5층·6층 출입문 유리", required: true, note: "손자국·얼룩 확인" },
-    { key: "powder", label: "파우더룸 완료", required: true, note: "먼지·머리카락" },
-    { key: "toilet", label: "화장실 완료", required: true, note: "세면대·거울·바닥" },
-    { key: "trash", label: "쓰레기 배출", required: true, note: "배출 후 상태" },
-    { key: "window", label: "창틀/날파리 구역", required: false, note: "요청 시 전후 사진" },
-    { key: "director", label: "원장실 쇼파 밑/휴게공간", required: false, note: "요청 시 전후 사진" },
-    { key: "leave", label: "퇴근 완료 사진", required: true, note: "최종 상태" },
+/* ─────────────────────────────────────────────
+   데이터 (메모리 데이터 + 추가 mock)
+   ───────────────────────────────────────────── */
+const SITE = {
+  id: "reto",
+  name: "리투의원",
+  type: "피부·미용 병원",
+  address: "서울 강남구 청담동",
+  manager: "박원준",
+  staff: "박지용",
+  grade: "VIP 관리",
+  closeRule: "오전 9:30 전 마감",
+  regularPoints: [
+    { id: "p1", text: "6층 관리실 거울", icon: "🪞" },
+    { id: "p2", text: "세면대 선반", icon: "🧴" },
+    { id: "p3", text: "5·6층 출입문 유리", icon: "🚪" },
+    { id: "p4", text: "파우더룸 먼지·머리카락", icon: "💄" },
+    { id: "p5", text: "창틀 날파리·러브벌레", icon: "🪟" },
+    { id: "p6", text: "원장실 쇼파 밑", icon: "🛋️" },
+    { id: "p7", text: "환자 베드 밑", icon: "🛏️" },
   ],
-  heisa_crossfit: [
-    { key: "arrival", label: "출근 도착 사진", required: true, note: "입구 또는 지정 위치" },
-    { key: "floor", label: "운동공간 바닥", required: true, note: "땀자국·먼지" },
-    { key: "locker", label: "남녀 탈의실", required: true, note: "머리카락·먼지" },
-    { key: "toilet", label: "화장실/샤워실", required: true, note: "물기·냄새" },
-    { key: "recovery", label: "리커버리룸", required: false, note: "사용 흔적" },
-    { key: "patio", label: "야외 테라스", required: false, note: "낙엽·쓰레기" },
-    { key: "leave", label: "퇴근 완료 사진", required: true, note: "최종 상태" },
+  requiredPhotos: [
+    { id: "rp1", text: "출입문 유리 (외부)", emoji: "🚪" },
+    { id: "rp2", text: "화장실 입구 전경", emoji: "🚻" },
+    { id: "rp3", text: "쓰레기 배출 상태", emoji: "🗑️" },
+    { id: "rp4", text: "파우더룸 전체", emoji: "💄" },
+    { id: "rp5", text: "원장실 입구", emoji: "🩺" },
+  ],
+  todayOrders: [
+    {
+      id: "o1",
+      urgency: "high",
+      text: "VIP 환자 방문 예정 — 파우더룸·원장실 사전점검 강화",
+    },
+    {
+      id: "o2",
+      urgency: "normal",
+      text: "어제 컴플레인: 파우더룸 머리카락 재확인 후 사진 필수",
+    },
   ],
 };
 
-const ISSUE_TYPES = ["특이사항 없음", "소모품 부족", "시설 문제", "오염 심함", "고객 요청", "출입 제한", "날파리/벌레", "장비 접근 제한", "작업 미완료", "기타"];
+const QUICK_CHIPS = [
+  "병원 요청 있었음",
+  "추가 작업 발생",
+  "도어락 문제",
+  "비품 부족",
+  "VIP 사전점검 완료",
+  "특이 컴플레인 없음",
+];
 
-function getInitialSiteId() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("site") || "reto_clinic";
+// Make Webhook URL은 운영 시 Vercel 환경변수 또는 코드 상단에 연결합니다.
+// 병원 요청과 작업자 처리완료를 분리해 두면 Google Sheets 시트를 나눠 저장하기 좋습니다.
+const MAKE_WEBHOOKS = {
+  request: "", // 요청사항_DB 저장용 Webhook
+  workResult: "", // 작업자_처리_DB 저장용 Webhook
+  photo: "", // 사진_DB 저장용 Webhook, 선택
+};
+
+const ISSUE_OPTIONS = [
+  "바닥 얼룩",
+  "머리카락",
+  "먼지",
+  "유리 얼룩",
+  "쓰레기 미처리",
+  "화장실 냄새",
+  "하수구 냄새",
+  "창틀 벌레",
+  "소모품 부족",
+  "기타",
+];
+
+const LOCATION_OPTIONS = [
+  "로비/대기실",
+  "파우더룸",
+  "화장실",
+  "원장실",
+  "진료실",
+  "출입문 유리",
+  "창틀",
+  "쓰레기장",
+  "기타",
+];
+
+const REQUEST_TIMELINE = [
+  "요청 접수",
+  "관리자 확인",
+  "작업자 전달",
+  "작업 중",
+  "처리 완료",
+  "병원 확인",
+];
+
+const RESOLUTION_OPTIONS = [
+  "청소로 해결 완료",
+  "반복 관리 필요",
+  "시설 문제 가능성",
+  "방역 필요 가능성",
+  "고객 안내 필요",
+  "관리자 확인 필요",
+];
+
+const TODAY_WORK_REQUESTS = [
+  {
+    id: "WR-001",
+    title: "파우더룸 머리카락 집중관리",
+    area: "파우더룸",
+    instruction: "바닥·선반·거울 주변 먼지와 머리카락 제거 후 처리 후 사진 필수",
+    urgency: "high",
+  },
+  {
+    id: "WR-002",
+    title: "출입문 유리 VIP 전 점검",
+    area: "5·6층 출입문 유리",
+    instruction: "유리 손자국과 햇빛 얼룩 확인. 작업 후 같은 각도 사진 등록",
+    urgency: "normal",
+  },
+  {
+    id: "WR-003",
+    title: "창틀 벌레 사체 확인",
+    area: "원장실 휴게공간 창틀",
+    instruction: "청소 가능 범위 제거. 화단·건물 원인 가능성 있으면 관리자 확인 필요 선택",
+    urgency: "normal",
+  },
+];
+
+const SHEET_SCHEMA = {
+  request: [
+    "요청ID",
+    "병원명",
+    "현장ID",
+    "요청유형",
+    "긴급도",
+    "발생위치",
+    "요청내용",
+    "사진링크",
+    "접수시간",
+    "처리상태",
+    "담당작업자",
+    "직원공유여부",
+    "처리완료시간",
+    "재요청여부",
+  ],
+  workResult: [
+    "처리ID",
+    "요청ID",
+    "병원명",
+    "작업자",
+    "발생위치",
+    "처리결과",
+    "작업전사진링크",
+    "작업후사진링크",
+    "처리메모",
+    "처리시간",
+  ],
+  photo: ["사진ID", "요청ID", "병원명", "사진구분", "사진링크", "촬영시간"],
+  monthlyReport: ["보고서ID", "병원명", "보고월", "작업횟수", "요청건수", "처리완료건수", "컴플레인건수", "반복구역", "다음달관리포인트"],
+};
+
+function makeId(prefix) {
+  return `${prefix}-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 90 + 10)}`;
 }
 
-function getAppBaseUrl() {
-  return window.location.origin + window.location.pathname;
+function nowLabel() {
+  return new Date().toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function StatusBadge({ children, tone = "default" }) {
-  return <span className={`badge ${tone}`}>{children}</span>;
+async function postToMake(kind, payload) {
+  const url = MAKE_WEBHOOKS[kind];
+  if (!url) {
+    console.log(`[Make:${kind}]`, payload);
+    return { ok: true, skipped: true };
+  }
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return { ok: res.ok };
+  } catch (error) {
+    console.error(error);
+    return { ok: false, error };
+  }
 }
 
-function Button({ children, onClick, variant = "primary", disabled = false, type = "button" }) {
-  return <button type={type} onClick={onClick} disabled={disabled} className={`btn ${variant}`} >{children}</button>;
+function buildPhotoPath({ siteName, date = new Date(), fileName }) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `KB클린 현장관리/${siteName}/${yyyy}-${mm}/${yyyy}-${mm}-${dd}/${fileName}`;
 }
 
-function Card({ children, className = "" }) {
-  return <div className={`card ${className}`}>{children}</div>;
-}
+/* 병원 — 내 요청 mock */
+const MY_REQUESTS = [
+  {
+    id: "R-11-15",
+    type: "컴플레인",
+    urgency: "high",
+    title: "파우더룸 바닥 머리카락",
+    status: "완료",
+    registeredAt: "11월 15일 14:22",
+    completedAt: "11월 16일 09:18",
+  },
+  {
+    id: "R-11-19",
+    type: "요청",
+    urgency: "normal",
+    title: "VIP 방문 사전점검 요청",
+    status: "완료",
+    registeredAt: "11월 19일 09:30",
+    completedAt: "11월 19일 17:48",
+  },
+  {
+    id: "R-11-24",
+    type: "요청",
+    urgency: "normal",
+    title: "탕비실 싱크대 배수구 냄새",
+    status: "처리중",
+    registeredAt: "11월 24일 16:05",
+  },
+];
 
-export default function App() {
-  const [mode, setMode] = useState("qr");
-  const [siteId, setSiteId] = useState(getInitialSiteId());
-  const [worker, setWorker] = useState("");
-  const [step, setStep] = useState(1);
-  const [checkType, setCheckType] = useState("출근");
-  const [photos, setPhotos] = useState({});
-  const [checked, setChecked] = useState({});
-  const [issueType, setIssueType] = useState("특이사항 없음");
-  const [memo, setMemo] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState("");
-  const [geo, setGeo] = useState(null);
+/* 월간 보고서 데이터 */
+const REPORT = {
+  month: "2025년 11월",
+  prevMonth: "10월",
+  hospital: "리투의원",
+  manager: "박원준",
+  staff: "박지용",
+  staffNote: "정기 담당 2년차",
+  kpi: [
+    { label: "방문 횟수", value: "13", sub: "정기 12 + 추가 1회" },
+    { label: "정시 출근", value: "13 / 13", sub: "전월 12 / 13" },
+    { label: "처리 요청", value: "8", sub: "평균 14시간 내" },
+    { label: "증빙 사진", value: "142", sub: "전월 대비 +18장" },
+  ],
+  // 11월 1~30일
+  calendar: [
+    { d: 1, w: "토", s: "off" },
+    { d: 2, w: "일", s: "off" },
+    { d: 3, w: "월", s: "off" },
+    { d: 4, w: "화", s: "visit" },
+    { d: 5, w: "수", s: "visit" },
+    { d: 6, w: "목", s: "visit" },
+    { d: 7, w: "금", s: "off" },
+    { d: 8, w: "토", s: "off" },
+    { d: 9, w: "일", s: "off" },
+    { d: 10, w: "월", s: "off" },
+    { d: 11, w: "화", s: "visit" },
+    { d: 12, w: "수", s: "visit" },
+    { d: 13, w: "목", s: "visit" },
+    { d: 14, w: "금", s: "off" },
+    { d: 15, w: "토", s: "warn" },
+    { d: 16, w: "일", s: "extra" },
+    { d: 17, w: "월", s: "off" },
+    { d: 18, w: "화", s: "visit" },
+    { d: 19, w: "수", s: "visit" },
+    { d: 20, w: "목", s: "visit" },
+    { d: 21, w: "금", s: "off" },
+    { d: 22, w: "토", s: "off" },
+    { d: 23, w: "일", s: "off" },
+    { d: 24, w: "월", s: "off" },
+    { d: 25, w: "화", s: "visit" },
+    { d: 26, w: "수", s: "visit" },
+    { d: 27, w: "목", s: "visit" },
+    { d: 28, w: "금", s: "off" },
+    { d: 29, w: "토", s: "off" },
+    { d: 30, w: "일", s: "off" },
+  ],
+  regularPoints: [
+    { name: "6층 관리실 거울", icon: "🪞", visits: 13, photos: 26 },
+    { name: "세면대 선반", icon: "🧴", visits: 13, photos: 26 },
+    { name: "5·6층 출입문 유리", icon: "🚪", visits: 13, photos: 39 },
+    {
+      name: "파우더룸 먼지·머리카락",
+      icon: "💄",
+      visits: 13,
+      photos: 32,
+      highlighted: true,
+      hlNote: "병원 요청 강화 항목",
+    },
+    { name: "창틀 날파리·러브벌레", icon: "🪟", visits: 13, photos: 13 },
+    { name: "원장실 쇼파 밑", icon: "🛋️", visits: 13, photos: 13 },
+    { name: "환자 베드 밑", icon: "🛏️", visits: 13, photos: 13 },
+  ],
+  requests: [
+    {
+      id: "11-03",
+      no: "#11-03",
+      type: "요청",
+      urgency: "normal",
+      title: "VIP 환자 방문 전 사전점검 요청",
+      original:
+        "다음 주 화요일 VIP 환자 방문 예정입니다. 사전점검 강화 부탁드립니다.",
+      registeredAt: "11월 3일 16:42",
+      adminInstruction:
+        "11/5 화요일 정규 작업 + 파우더룸·원장실 추가 점검, 방문 30분 전 완료",
+      assignee: "박지용",
+      completedAt: "11월 5일 09:12",
+      duration: "1일 16시간",
+      confirmedAt: "11월 5일 11:30",
+    },
+    {
+      id: "11-15",
+      no: "#11-15",
+      type: "컴플레인",
+      urgency: "high",
+      title: "파우더룸 바닥에 머리카락이 많이 보임",
+      original:
+        "오늘 환자가 파우더룸 바닥에 머리카락이 많다고 말씀하셨어요. 신경 써 주세요.",
+      registeredAt: "11월 15일 14:22",
+      adminInstruction:
+        "파우더룸 바닥·선반·거울 주변 먼지·머리카락 전체 제거, 처리 후 사진 필수",
+      assignee: "박지용",
+      completedAt: "11월 16일 09:18",
+      duration: "19시간",
+      confirmedAt: "11월 16일 11:05",
+    },
+    {
+      id: "11-19",
+      no: "#11-19",
+      type: "요청",
+      urgency: "normal",
+      title: "5층 출입문 유리 — 오후 햇빛 얼룩",
+      original:
+        "오후에 햇빛 비치면 유리 얼룩이 두드러집니다. 청소 시 조금 더 신경 부탁드려요.",
+      registeredAt: "11월 19일 09:30",
+      adminInstruction:
+        "5·6층 출입문 유리 안쪽·바깥쪽 모두 무얼룩 마감, 햇빛 각도에서 확인 후 사진",
+      assignee: "박지용",
+      completedAt: "11월 19일 17:48",
+      duration: "8시간",
+      confirmedAt: "11월 20일 09:11",
+    },
+  ],
+  galleries: [
+    {
+      key: "rest",
+      title: "화장실 입구",
+      icon: "🚻",
+      photos: ["1주차", "2주차", "3주차", "4주차"],
+    },
+    {
+      key: "glass",
+      title: "출입문 유리",
+      icon: "🚪",
+      photos: ["1주차", "2주차", "3주차", "4주차"],
+    },
+    {
+      key: "powder",
+      title: "파우더룸",
+      icon: "💄",
+      photos: ["1주차", "2주차", "3주차", "4주차"],
+    },
+    {
+      key: "trash",
+      title: "쓰레기 배출",
+      icon: "🗑️",
+      photos: ["1주차", "2주차", "3주차", "4주차"],
+    },
+  ],
+  comment: `이번 달 리투의원은 정기 방문 13회를 모두 정시 도착으로 완료했습니다.
 
-  const site = FIELD_SITES.find((s) => s.id === siteId) || FIELD_SITES[0];
-  const photoPoints = PHOTO_POINTS[site.id] || [];
-  const requiredPoints = photoPoints.filter((p) => p.required);
-  const uploadedRequired = requiredPoints.filter((p) => photos[p.key]).length;
-  const checkedRequired = requiredPoints.filter((p) => checked[p.key]).length;
-  const completion = Math.round(((uploadedRequired + checkedRequired) / (requiredPoints.length * 2)) * 100);
-  const siteUrl = `${getAppBaseUrl()}?site=${site.id}`;
+11월 둘째 주 파우더룸 위생 관련 컴플레인 1건이 있어, 다음 달부터 매 방문 시 파우더룸 별도 체크리스트를 추가하여 운영하겠습니다.
 
+또한 VIP 방문 사전점검 요청이 늘어남에 따라, 다음 달부터 별도 알림 채널을 운영하여 빠르게 대응하겠습니다.
+
+겨울철 진입에 따라 창틀 결로·곰팡이 사전 예방 점검도 12월부터 정기 항목에 추가됩니다.`,
+  nextMonth: [
+    "파우더룸 위생관리 — 매방문 별도 체크리스트 운영",
+    "VIP 사전점검 알림 채널 신설 (담당자 직통)",
+    "창틀 결로·곰팡이 사전 예방 점검 (계절 대응 신규)",
+  ],
+};
+
+/* ─────────────────────────────────────────────
+   유틸 / 공통 컴포넌트
+   ───────────────────────────────────────────── */
+function useInjectFont() {
   useEffect(() => {
-    setWorker(site.worker || "");
-  }, [site.id]);
+    if (document.getElementById("kb-pretendard")) return;
+    const link = document.createElement("link");
+    link.id = "kb-pretendard";
+    link.rel = "stylesheet";
+    link.href =
+      "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css";
+    document.head.appendChild(link);
+  }, []);
+}
 
-  const now = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
-  }, [submitted, step]);
+const fontStack = `'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif`;
 
-  const getLocation = () => {
-    if (!navigator.geolocation) {
-      setSubmitMessage("이 기기는 위치 기록을 지원하지 않습니다.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGeo({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-        });
-        setSubmitMessage("위치가 기록되었습니다.");
-      },
-      () => setSubmitMessage("위치 권한이 거부되었습니다. 위치 없이 제출할 수 있습니다.")
-    );
-  };
-
-  const notionPayload = {
-    site: site.name,
-    siteId: site.id,
-    worker,
-    checkType,
-    submittedAt: now,
-    status: completion >= 85 ? "완료" : "확인필요",
-    requiredPhotoCount: requiredPoints.length,
-    uploadedRequired,
-    completion,
-    issueType,
-    memo,
-    location: geo,
-    photos,
-    checklist: checked,
-  };
-
-  const handlePhoto = (key, file) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotos((prev) => ({
-        ...prev,
-        [key]: {
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          base64: reader.result
-        }
-      }));
-      setChecked((prev) => ({ ...prev, [key]: true }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const resetForm = () => {
-    setStep(1);
-    setCheckType("출근");
-    setPhotos({});
-    setChecked({});
-    setIssueType("특이사항 없음");
-    setMemo("");
-    setSubmitted(false);
-    setSubmitMessage("");
-    setGeo(null);
-  };
-
-  const submitToWebhook = async () => {
-    setSubmitMessage("제출 중입니다...");
-    if (!MAKE_WEBHOOK_URL) {
-      setSubmitted(true);
-      setSubmitMessage("Webhook URL이 아직 비어 있어 화면상 제출만 완료했습니다. Make Webhook 연결 후 실제 Notion 저장됩니다.");
-      setMode("admin");
-      return;
-    }
-    try {
-      const res = await fetch(MAKE_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(notionPayload),
-      });
-      if (!res.ok) throw new Error("Webhook error");
-      setSubmitted(true);
-      setSubmitMessage("제출 완료. Make/Notion으로 전송되었습니다.");
-      setMode("admin");
-    } catch (e) {
-      setSubmitMessage("전송 실패. Webhook URL 또는 Make 시나리오를 확인하세요.");
-    }
-  };
-
+function Brand({ size = "md", invert = false }) {
+  const ink = invert ? "#fff" : KB.navy;
+  const sub = invert ? KB.goldLight : KB.gold;
   return (
-    <div className="app">
-      <div className="container">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="hero">
-          <div>
-            <div className="eyebrow"><ShieldCheck size={16} /> KB클린 정기청소 현장관리 v0.1</div>
-            <h1>QR 출근 · 사진증빙 · Notion 저장 웹앱</h1>
-            <p>직원이 현장 QR을 찍고 출근, 필수 사진, 퇴근, 특이사항을 등록하는 모바일용 프로토타입입니다.</p>
-          </div>
-          <div className="heroStats">
-            <div><b>{completion}%</b><span>완료율</span></div>
-            <div><b>{uploadedRequired}/{requiredPoints.length}</b><span>필수사진</span></div>
-          </div>
-        </motion.div>
-
-        <div className="tabs">
-          {[
-            ["qr", "1. QR 생성", QrCode],
-            ["mobile", "2. 모바일 등록", Camera],
-            ["admin", "3. 관리자 확인", ClipboardCheck],
-            ["notion", "4. 전송 데이터", FileText],
-          ].map(([key, label, Icon]) => (
-            <button key={key} onClick={() => setMode(key)} className={mode === key ? "tab active" : "tab"}>
-              <Icon size={18} />
-              <span>{label}</span>
-            </button>
-          ))}
+    <div
+      style={{ fontFamily: fontStack }}
+      className="flex items-center gap-2 select-none"
+    >
+      <div
+        style={{
+          background: invert ? "#fff" : KB.navy,
+          color: invert ? KB.navy : "#fff",
+        }}
+        className={`flex items-center justify-center rounded-md font-black ${
+          size === "lg" ? "w-10 h-10 text-base" : "w-8 h-8 text-sm"
+        }`}
+      >
+        KB
+      </div>
+      <div className="leading-tight">
+        <div
+          style={{ color: ink, letterSpacing: "-0.02em" }}
+          className={`font-black ${size === "lg" ? "text-xl" : "text-base"}`}
+        >
+          KB클린
         </div>
-
-        {mode === "qr" && (
-          <div className="grid two">
-            <Card>
-              <h2><QrCode size={24} /> 현장 QR</h2>
-              <div className="siteList">
-                {FIELD_SITES.map((s) => (
-                  <button key={s.id} onClick={() => setSiteId(s.id)} className={site.id === s.id ? "site active" : "site"}>
-                    <strong>{s.name}</strong>
-                    <small>{s.type}</small>
-                    <StatusBadge tone={s.priority === "높음" ? "warn" : "default"}>중요도 {s.priority}</StatusBadge>
-                  </button>
-                ))}
-              </div>
-              <div className="qrBox">
-                <QRCodeCanvas value={siteUrl} size={210} includeMargin />
-                <strong>{site.name} QR</strong>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="cardHeader">
-                <div>
-                  <h2>{site.name} 접속 정보</h2>
-                  <p>이 링크를 QR로 변환해서 현장에 붙이면 됩니다.</p>
-                </div>
-                <StatusBadge tone="good">QR 준비</StatusBadge>
-              </div>
-              <div className="linkBox">
-                <LinkIcon size={16} /> <span>{siteUrl}</span>
-              </div>
-              <div className="infoGrid">
-                <Info icon={Building2} label="현장 유형" value={site.type} />
-                <Info icon={UserRound} label="기본 작업자" value={site.worker} />
-                <Info icon={Clock} label="시간 기준" value={site.requiredCloseTime} />
-                <Info icon={MapPin} label="주소" value={site.address} />
-              </div>
-              <div className="issueBox">
-                <strong>반복 요청사항</strong>
-                <div className="chips">
-                  {site.repeatedIssues.map((x) => <StatusBadge key={x} tone="warn">{x}</StatusBadge>)}
-                </div>
-              </div>
-              <Button onClick={() => { setMode("mobile"); resetForm(); }}>
-                모바일 등록화면 열기 <ArrowRight size={18} />
-              </Button>
-            </Card>
-          </div>
-        )}
-
-        {mode === "mobile" && (
-          <div className="phoneWrap">
-            <div className="phone">
-              <div className="phoneTop">직원 모바일 등록 화면</div>
-              <div className="phoneBody">
-                <div className="siteSummary">
-                  <small>현재 현장</small>
-                  <strong>{site.name}</strong>
-                  <div className="chips">
-                    <StatusBadge>{site.type}</StatusBadge>
-                    <StatusBadge tone={site.priority === "높음" ? "warn" : "default"}>{site.requiredCloseTime}</StatusBadge>
-                  </div>
-                </div>
-
-                {!submitted ? (
-                  <>
-                    <StepDots step={step} />
-                    {step === 1 && (
-                      <MobileSection title="1. 출근/퇴근 선택" subtitle="QR로 들어오면 현장이 자동 선택됩니다.">
-                        <label>작업자명</label>
-                        <input value={worker} onChange={(e) => setWorker(e.target.value)} />
-                        <label>등록 구분</label>
-                        <div className="segmented">
-                          {["출근", "퇴근"].map((x) => (
-                            <button key={x} onClick={() => setCheckType(x)} className={checkType === x ? "selected" : ""}>{x}</button>
-                          ))}
-                        </div>
-                        <div className="timeBox"><Clock size={16} /> 자동 기록 시간: {now}</div>
-                        <Button variant="secondary" onClick={getLocation}>현재 위치 기록</Button>
-                        {geo && <div className="timeBox">위치: {geo.lat.toFixed(5)}, {geo.lng.toFixed(5)}</div>}
-                        <Button onClick={() => setStep(2)}>다음</Button>
-                      </MobileSection>
-                    )}
-
-                    {step === 2 && (
-                      <MobileSection title="2. 필수 사진 촬영" subtitle="사진이 없으면 작업 확인이 어렵습니다.">
-                        <div className="photoList">
-                          {photoPoints.map((p) => (
-                            <div key={p.key} className="photoItem">
-                              <div className="photoMeta">
-                                <div><strong>{p.label}</strong><small>{p.note}</small></div>
-                                {p.required ? <StatusBadge tone="danger">필수</StatusBadge> : <StatusBadge>선택</StatusBadge>}
-                              </div>
-                              <label className={photos[p.key] ? "upload done" : "upload"}>
-                                <Camera size={16} />
-                                {photos[p.key] ? photos[p.key].fileName : "사진 선택/촬영"}
-                                <input type="file" accept="image/*" capture="environment" onChange={(e) => handlePhoto(p.key, e.target.files?.[0])} />
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="navButtons">
-                          <Button variant="ghost" onClick={() => setStep(1)}>이전</Button>
-                          <Button onClick={() => setStep(3)}>다음</Button>
-                        </div>
-                      </MobileSection>
-                    )}
-
-                    {step === 3 && (
-                      <MobileSection title="3. 특이사항 입력" subtitle="문제가 없으면 ‘특이사항 없음’을 선택합니다.">
-                        <label>특이사항 구분</label>
-                        <select value={issueType} onChange={(e) => setIssueType(e.target.value)}>
-                          {ISSUE_TYPES.map((x) => <option key={x}>{x}</option>)}
-                        </select>
-                        <label>메모</label>
-                        <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="예: 원장실 창틀 날파리 사체 제거 완료 / 고가 장비 때문에 안쪽은 접근 제한" />
-                        {issueType !== "특이사항 없음" && <div className="warnBox"><AlertTriangle size={16} /> 특이사항은 관리자 확인 대상으로 저장됩니다.</div>}
-                        <div className="navButtons">
-                          <Button variant="ghost" onClick={() => setStep(2)}>이전</Button>
-                          <Button onClick={() => setStep(4)}>다음</Button>
-                        </div>
-                      </MobileSection>
-                    )}
-
-                    {step === 4 && (
-                      <MobileSection title="4. 최종 제출" subtitle="제출하면 Make Webhook으로 전송됩니다.">
-                        <div className="summaryBox">
-                          <Row label="현장" value={site.name} />
-                          <Row label="작업자" value={worker} />
-                          <Row label="구분" value={checkType} />
-                          <Row label="필수사진" value={`${uploadedRequired}/${requiredPoints.length}`} />
-                          <Row label="완료율" value={`${completion}%`} />
-                          <Row label="특이사항" value={issueType} />
-                        </div>
-                        {uploadedRequired < requiredPoints.length && <div className="dangerBox">필수 사진이 부족합니다. 제출 시 ‘확인필요’ 상태로 저장됩니다.</div>}
-                        {submitMessage && <div className="timeBox">{submitMessage}</div>}
-                        <div className="navButtons">
-                          <Button variant="ghost" onClick={() => setStep(3)}>이전</Button>
-                          <Button onClick={submitToWebhook}><Send size={16} /> 제출</Button>
-                        </div>
-                      </MobileSection>
-                    )}
-                  </>
-                ) : (
-                  <div className="success">
-                    <CheckCircle2 size={52} />
-                    <strong>제출 완료</strong>
-                    <p>{submitMessage}</p>
-                    <Button variant="secondary" onClick={resetForm}><RotateCcw size={16} /> 새 등록</Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {mode === "admin" && (
-          <div className="grid two">
-            <Card>
-              <h2><ClipboardCheck size={24} /> 대표/관리자 확인 화면</h2>
-              <div className="metrics">
-                <Metric label="완료율" value={`${completion}%`} tone={completion >= 85 ? "good" : "warn"} />
-                <Metric label="필수사진" value={`${uploadedRequired}/${requiredPoints.length}`} tone={uploadedRequired === requiredPoints.length ? "good" : "danger"} />
-                <Metric label="특이사항" value={issueType === "특이사항 없음" ? "없음" : "있음"} tone={issueType === "특이사항 없음" ? "good" : "warn"} />
-                <Metric label="상태" value={completion >= 85 ? "완료" : "확인필요"} tone={completion >= 85 ? "good" : "danger"} />
-              </div>
-              <div className="adminList">
-                {photoPoints.map((p) => (
-                  <div key={p.key} className="adminRow">
-                    <div><strong>{p.label}</strong><small>{p.note}</small></div>
-                    {photos[p.key] ? <StatusBadge tone="good">사진등록</StatusBadge> : p.required ? <StatusBadge tone="danger">누락</StatusBadge> : <StatusBadge>선택</StatusBadge>}
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card>
-              <h2>관리자 조치 필요</h2>
-              <div className="alertList">
-                {uploadedRequired < requiredPoints.length && <AdminAlert title="필수 사진 누락" body="작업자에게 추가 업로드 요청이 필요합니다." danger />}
-                {issueType !== "특이사항 없음" && <AdminAlert title={issueType} body={memo || "특이사항 내용 확인 후 처리상태를 기록해야 합니다."} />}
-                {site.id === "reto_clinic" && <AdminAlert title="리투의원 반복 요청 구역" body="거울, 선반, 유리문, 창틀, 파우더룸, 원장실은 다음 작업에도 우선 확인 대상으로 유지합니다." />}
-                {uploadedRequired === requiredPoints.length && issueType === "특이사항 없음" && <AdminAlert title="정상 완료" body="필수 사진과 특이사항 기준상 정상 완료입니다." good />}
-              </div>
-              <Button onClick={() => setMode("notion")}>전송 데이터 보기</Button>
-            </Card>
-          </div>
-        )}
-
-        {mode === "notion" && (
-          <Card>
-            <div className="cardHeader">
-              <div>
-                <h2><FileText size={24} /> Make / Notion 전송 데이터</h2>
-                <p>Make Webhook URL 연결 시 아래 JSON이 전송됩니다.</p>
-              </div>
-              <StatusBadge tone="good">연동 준비</StatusBadge>
-            </div>
-            <pre>{JSON.stringify(notionPayload, null, 2)}</pre>
-            <div className="nextBox">
-              <strong>다음 단계</strong>
-              <ol>
-                <li>Make에서 Custom Webhook 생성</li>
-                <li>src/App.jsx 상단 MAKE_WEBHOOK_URL에 붙여넣기</li>
-                <li>Vercel에 재배포</li>
-                <li>Make에서 Google Drive 사진 저장 → Notion DB 생성 연결</li>
-              </ol>
-            </div>
-          </Card>
-        )}
+        <div
+          style={{ color: sub, letterSpacing: "0.18em" }}
+          className="text-[10px] font-semibold"
+        >
+          FIELD OPS
+        </div>
       </div>
     </div>
   );
 }
 
-function Info({ icon: Icon, label, value }) {
-  return <div className="info"><div><Icon size={16} />{label}</div><strong>{value}</strong></div>;
+function BigButton({ children, onClick, tone = "primary", disabled, icon: Icon }) {
+  const tones = {
+    primary: { bg: KB.navy, color: "#fff", hover: KB.navyDeep },
+    gold: { bg: KB.gold, color: KB.navy, hover: "#B89548" },
+    soft: { bg: "#fff", color: KB.navy, border: KB.navy },
+    ghost: { bg: "transparent", color: KB.inkSoft, border: KB.line },
+  };
+  const t = tones[tone] || tones.primary;
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: disabled ? "#E4E2DA" : t.bg,
+        color: disabled ? "#A0A0A0" : t.color,
+        border: t.border ? `1.5px solid ${t.border}` : "none",
+        fontFamily: fontStack,
+        letterSpacing: "-0.01em",
+      }}
+      className="w-full px-5 py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 active:scale-[0.98] transition disabled:cursor-not-allowed shadow-sm"
+    >
+      {Icon && <Icon size={20} strokeWidth={2.4} />}
+      {children}
+    </button>
+  );
 }
 
-function Row({ label, value }) {
-  return <div className="row"><span>{label}</span><strong>{value}</strong></div>;
+function Pill({ children, tone = "navy" }) {
+  const tones = {
+    navy: { bg: KB.navy, color: "#fff" },
+    gold: { bg: KB.goldMute, color: "#8B6914" },
+    ok: { bg: KB.okSoft, color: KB.ok },
+    warn: { bg: KB.warnSoft, color: KB.warn },
+    bad: { bg: KB.badSoft, color: KB.bad },
+    line: { bg: "#fff", color: KB.inkSoft, border: KB.line },
+  };
+  const t = tones[tone];
+  return (
+    <span
+      style={{
+        background: t.bg,
+        color: t.color,
+        border: t.border ? `1px solid ${t.border}` : "none",
+        fontFamily: fontStack,
+      }}
+      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-bold tracking-tight"
+    >
+      {children}
+    </span>
+  );
 }
 
-function StepDots({ step }) {
-  return <div className="steps">{[1,2,3,4].map((n) => <div key={n} className={step >= n ? "on" : ""} />)}</div>;
+function Stepper({ step, total }) {
+  return (
+    <div className="flex items-center gap-1.5 px-1">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            background: i < step ? KB.navy : i === step ? KB.gold : KB.line,
+            height: 4,
+          }}
+          className="flex-1 rounded-full transition-all"
+        />
+      ))}
+    </div>
+  );
 }
 
-function MobileSection({ title, subtitle, children }) {
-  return <div className="mobileSection"><h2>{title}</h2><p>{subtitle}</p>{children}</div>;
+/* ─────────────────────────────────────────────
+   루트 — 역할 선택
+   ───────────────────────────────────────────── */
+function getInitialRoleFromUrl() {
+  if (typeof window === "undefined") return null;
+  const path = window.location.pathname.toLowerCase();
+  const params = new URLSearchParams(window.location.search);
+  const roleParam = params.get("role");
+  if (path.includes("/hospital") || roleParam === "hospital") return "hospital";
+  if (path.includes("/staff") || path.includes("/worker") || roleParam === "work") return "work";
+  if (path.includes("/admin") || roleParam === "admin") return "admin";
+  return null;
 }
 
-function Metric({ label, value, tone }) {
-  return <div className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>;
+export default function App() {
+  useInjectFont();
+  const [role, setRole] = useState(() => getInitialRoleFromUrl());
+
+  return (
+    <div
+      style={{ background: KB.bg, fontFamily: fontStack, color: KB.ink }}
+      className="min-h-screen"
+    >
+      {!role && <RoleHome onPick={setRole} />}
+      {role === "work" && <WorkerApp onExit={() => setRole(null)} />}
+      {role === "hospital" && <HospitalApp onExit={() => setRole(null)} />}
+      {role === "admin" && <AdminPlaceholder onExit={() => setRole(null)} />}
+    </div>
+  );
 }
 
-function AdminAlert({ title, body, danger, good }) {
-  return <div className={`adminAlert ${good ? "good" : danger ? "danger" : "warn"}`}><strong>{title}</strong><p>{body}</p></div>;
+function RoleHome({ onPick }) {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${KB.navyDeep} 0%, ${KB.navy} 55%, ${KB.navyLight} 100%)`,
+        }}
+        className="px-6 pt-14 pb-20 text-white relative overflow-hidden"
+      >
+        <div
+          style={{
+            background: KB.gold,
+            opacity: 0.15,
+          }}
+          className="absolute -right-20 -top-20 w-80 h-80 rounded-full blur-3xl"
+        />
+        <div className="relative max-w-md mx-auto">
+          <Brand size="lg" invert />
+          <div className="mt-10">
+            <div
+              style={{ color: KB.goldLight, letterSpacing: "0.2em" }}
+              className="text-[11px] font-bold"
+            >
+              KB CLEAN · FIELD MANAGEMENT
+            </div>
+            <h1
+              style={{ letterSpacing: "-0.03em" }}
+              className="mt-2 text-3xl font-black leading-tight"
+            >
+              병원 정기청소,<br />
+              데이터로 증명합니다.
+            </h1>
+            <p className="mt-3 text-sm" style={{ color: "#C9D1F2" }}>
+              직원 출근·증빙 사진·요청 처리·월간 보고까지<br />한 흐름으로 관리하는 KB클린 현장 시스템
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 -mt-12 pb-12 max-w-md mx-auto w-full">
+        <div className="space-y-3">
+          <RoleCard
+            icon={UserRound}
+            tag="STAFF"
+            title="직원으로 시작"
+            desc="QR · 출근 · 사진 · 퇴근까지 6단계로"
+            onClick={() => onPick("work")}
+            accent={KB.navy}
+          />
+          <RoleCard
+            icon={Hospital}
+            tag="HOSPITAL"
+            title="병원으로 시작"
+            desc="요청 등록 · 처리 현황 · 월간 보고서 열람"
+            onClick={() => onPick("hospital")}
+            accent={KB.gold}
+          />
+          <RoleCard
+            icon={ShieldCheck}
+            tag="ADMIN"
+            title="관리자로 시작"
+            desc="현장 통합 보드 · 직원 작업지시 · 보고서 발송"
+            onClick={() => onPick("admin")}
+            accent={KB.inkSoft}
+          />
+        </div>
+
+        <div
+          style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+          className="mt-6 rounded-xl p-4 text-xs"
+        >
+          <div className="flex items-center gap-2 font-bold" style={{ color: KB.navy }}>
+            <Sparkles size={14} /> 데모 안내
+          </div>
+          <p className="mt-1.5" style={{ color: KB.inkSoft }}>
+            리투의원 데이터가 미리 채워져 있습니다. 초기 MVP는 병원용 / 작업자용 전용 링크를 분리해 운영합니다.
+          </p>
+          <div className="mt-3 grid gap-1 text-[11px] font-bold" style={{ color: KB.inkSoft }}>
+            <div>병원용: /hospital/reto?token=abc123</div>
+            <div>작업자용: /staff/reto?token=staff456</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+function RoleCard({ icon: Icon, tag, title, desc, onClick, accent }) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      style={{ background: "#fff", borderColor: KB.line }}
+      className="w-full text-left rounded-2xl border p-5 flex items-center gap-4 hover:shadow-md transition"
+    >
+      <div
+        style={{ background: accent + "14", color: accent }}
+        className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+      >
+        <Icon size={22} strokeWidth={2.2} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div
+          style={{ color: accent, letterSpacing: "0.18em" }}
+          className="text-[10px] font-bold"
+        >
+          {tag}
+        </div>
+        <div
+          style={{ color: KB.navy, letterSpacing: "-0.02em" }}
+          className="text-base font-black"
+        >
+          {title}
+        </div>
+        <div className="text-xs mt-0.5" style={{ color: KB.inkSoft }}>
+          {desc}
+        </div>
+      </div>
+      <ChevronRight size={20} style={{ color: KB.inkMute }} />
+    </motion.button>
+  );
+}
+
+/* ═════════════════════════════════════════════
+   ▒▒ 직원 위저드 ▒▒
+   ═════════════════════════════════════════════ */
+function WorkerApp({ onExit }) {
+  const [step, setStep] = useState(0);
+  const TOTAL = 6;
+
+  const [state, setState] = useState({
+    siteConfirmed: false,
+    clockInAt: null,
+    clockOutAt: null,
+    checks: {}, // pointId -> { done: bool, photo: bool }
+    requiredPhotos: {}, // rpId -> bool
+    noteMode: null, // 'none' | 'voice' | 'chips' | 'text'
+    chips: [],
+    text: "",
+    workResults: {}, // requestId -> { beforePhoto, afterPhoto, resolutionType, memo }
+  });
+
+  const update = (patch) => setState((s) => ({ ...s, ...patch }));
+
+  const goNext = () => setStep((s) => Math.min(TOTAL, s + 1));
+  const goPrev = () => setStep((s) => Math.max(0, s - 1));
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: "#fff" }}>
+      {/* 상단 헤더 */}
+      <div
+        style={{ background: "#fff", borderBottom: `1px solid ${KB.line}` }}
+        className="sticky top-0 z-30"
+      >
+        <div className="max-w-md mx-auto px-4 pt-3 pb-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={step === 0 ? onExit : goPrev}
+              className="flex items-center gap-1 text-sm font-semibold"
+              style={{ color: KB.inkSoft }}
+            >
+              <ArrowLeft size={18} />
+              {step === 0 ? "역할 선택" : "이전"}
+            </button>
+            <div
+              style={{ color: KB.inkMute, letterSpacing: "0.18em" }}
+              className="text-[10px] font-bold"
+            >
+              STEP {step + 1} / {TOTAL + 1}
+            </div>
+          </div>
+          <div className="mt-3">
+            <Stepper step={step} total={TOTAL + 1} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 max-w-md mx-auto w-full px-5 pb-32 pt-6">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            {step === 0 && (
+              <StepSiteConfirm state={state} update={update} onNext={goNext} />
+            )}
+            {step === 1 && (
+              <StepClockIn state={state} update={update} onNext={goNext} />
+            )}
+            {step === 2 && (
+              <StepChecklist state={state} update={update} onNext={goNext} />
+            )}
+            {step === 3 && (
+              <StepRequiredPhotos state={state} update={update} onNext={goNext} />
+            )}
+            {step === 4 && (
+              <StepNotes state={state} update={update} onNext={goNext} />
+            )}
+            {step === 5 && (
+              <StepSummary state={state} update={update} onNext={goNext} />
+            )}
+            {step === 6 && <StepDone onExit={onExit} />}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function StepHeader({ tag, title, desc }) {
+  return (
+    <div className="mb-6">
+      <div
+        style={{ color: KB.gold, letterSpacing: "0.2em" }}
+        className="text-[10px] font-black"
+      >
+        {tag}
+      </div>
+      <h2
+        style={{ color: KB.navy, letterSpacing: "-0.025em" }}
+        className="mt-1 text-2xl font-black leading-tight"
+      >
+        {title}
+      </h2>
+      {desc && (
+        <p className="mt-2 text-sm" style={{ color: KB.inkSoft }}>
+          {desc}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* Step 0 — 현장 확인 */
+function StepSiteConfirm({ update, onNext }) {
+  const now = new Date();
+  const dateStr = `${now.getMonth() + 1}월 ${now.getDate()}일 ${
+    ["일", "월", "화", "수", "목", "금", "토"][now.getDay()]
+  }요일`;
+
+  return (
+    <div>
+      <StepHeader
+        tag="현장 확인"
+        title="오늘 청소할 현장이 맞나요?"
+        desc="QR로 자동 인식했어요. 다르면 아래에서 변경하세요."
+      />
+
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${KB.navyDeep} 0%, ${KB.navy} 100%)`,
+        }}
+        className="rounded-2xl p-6 text-white shadow-lg"
+      >
+        <div className="flex items-center gap-2 text-xs" style={{ color: KB.goldLight }}>
+          <MapPin size={14} /> {dateStr}
+        </div>
+        <div className="mt-3 text-3xl font-black" style={{ letterSpacing: "-0.03em" }}>
+          {SITE.name}
+        </div>
+        <div className="mt-1 text-sm opacity-80">
+          {SITE.type} · {SITE.address}
+        </div>
+        <div className="mt-5 pt-5 border-t border-white/15 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <div className="text-[11px] opacity-60">담당자</div>
+            <div className="font-bold mt-0.5">{SITE.manager}</div>
+          </div>
+          <div>
+            <div className="text-[11px] opacity-60">오늘 작업자</div>
+            <div className="font-bold mt-0.5">{SITE.staff}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-[11px] opacity-60">마감 규칙</div>
+            <div className="font-bold mt-0.5">{SITE.closeRule}</div>
+          </div>
+        </div>
+      </div>
+
+      {SITE.todayOrders.length > 0 && (
+        <div
+          style={{ background: KB.goldMute, border: `1px solid ${KB.goldLight}` }}
+          className="mt-4 rounded-2xl p-4"
+        >
+          <div className="flex items-center gap-2 font-black text-sm" style={{ color: "#8B6914" }}>
+            <Star size={14} fill="#8B6914" /> 오늘은 평소와 달라요
+          </div>
+          <ul className="mt-3 space-y-2">
+            {SITE.todayOrders.map((o) => (
+              <li key={o.id} className="flex gap-2 text-sm" style={{ color: KB.navy }}>
+                <span className="font-black">·</span>
+                <span>
+                  {o.urgency === "high" && (
+                    <span style={{ color: KB.bad }} className="font-black mr-1">
+                      [중요]
+                    </span>
+                  )}
+                  {o.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-6 space-y-2.5">
+        <BigButton onClick={onNext} icon={ArrowRight}>
+          네, 맞아요 — 다음으로
+        </BigButton>
+        <BigButton tone="ghost">다른 현장으로 변경</BigButton>
+      </div>
+    </div>
+  );
+}
+
+/* Step 1 — 출근 */
+function StepClockIn({ state, update, onNext }) {
+  const [pressing, setPressing] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const handleClock = () => {
+    setPressing(true);
+    setTimeout(() => {
+      const now = new Date();
+      const t = `${String(now.getHours()).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}`;
+      update({ clockInAt: t });
+      setDone(true);
+      setTimeout(onNext, 900);
+    }, 600);
+  };
+
+  return (
+    <div>
+      <StepHeader
+        tag="출근"
+        title="출근 도장 찍기"
+        desc="GPS와 시간이 자동으로 기록됩니다."
+      />
+
+      <div
+        style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+        className="rounded-2xl p-5"
+      >
+        <div className="flex items-center gap-2 text-xs font-bold" style={{ color: KB.inkSoft }}>
+          <MapPin size={14} /> {SITE.address}
+        </div>
+        <div className="mt-2 text-xs" style={{ color: KB.inkMute }}>
+          GPS 정확도: 약 8m (정상)
+        </div>
+      </div>
+
+      <div className="mt-8 flex flex-col items-center">
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          onClick={handleClock}
+          disabled={done}
+          style={{
+            background: done
+              ? KB.ok
+              : `radial-gradient(circle at 30% 30%, ${KB.navyLight}, ${KB.navyDeep})`,
+            boxShadow: `0 20px 50px -10px ${KB.navy}66`,
+          }}
+          className="w-52 h-52 rounded-full text-white font-black text-xl flex flex-col items-center justify-center gap-2"
+        >
+          {done ? (
+            <>
+              <CheckCircle2 size={48} strokeWidth={2.2} />
+              <div style={{ letterSpacing: "-0.02em" }}>출근 완료</div>
+              <div className="text-sm font-bold" style={{ color: KB.goldLight }}>
+                {state.clockInAt}
+              </div>
+            </>
+          ) : (
+            <>
+              <LogIn size={48} strokeWidth={2.2} />
+              <div style={{ letterSpacing: "-0.02em" }}>
+                {pressing ? "기록 중..." : "출근하기"}
+              </div>
+              <div className="text-xs font-bold opacity-70">탭하세요</div>
+            </>
+          )}
+        </motion.button>
+        <div className="mt-6 text-xs" style={{ color: KB.inkMute }}>
+          {done ? "잠시 후 다음 단계로 이동합니다" : "위치가 다르면 안내가 표시됩니다"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Step 2 — 체크리스트 */
+function StepChecklist({ state, update, onNext }) {
+  const toggleDone = (id) => {
+    const cur = state.checks[id] || {};
+    update({
+      checks: { ...state.checks, [id]: { ...cur, done: !cur.done } },
+    });
+  };
+  const togglePhoto = (id) => {
+    const cur = state.checks[id] || {};
+    update({
+      checks: { ...state.checks, [id]: { ...cur, photo: !cur.photo } },
+    });
+  };
+
+  const doneCount = SITE.regularPoints.filter(
+    (p) => state.checks[p.id]?.done
+  ).length;
+  const total = SITE.regularPoints.length;
+
+  return (
+    <div>
+      <StepHeader
+        tag="오늘 할 일"
+        title="정기 점검 항목 체크"
+        desc="작업하면서 그 자리에서 체크 + 사진 한 장"
+      />
+
+      <div
+        style={{ background: KB.navy, color: "#fff" }}
+        className="rounded-2xl px-5 py-4 flex items-center justify-between"
+      >
+        <div>
+          <div className="text-[11px] font-bold" style={{ color: KB.goldLight, letterSpacing: "0.15em" }}>
+            진행 현황
+          </div>
+          <div className="text-2xl font-black mt-0.5">
+            {doneCount} / {total}
+            <span className="text-sm font-bold opacity-60 ml-1">완료</span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[11px] font-bold opacity-60">
+            {SITE.name}
+          </div>
+          <div className="text-xs font-bold opacity-80 mt-0.5">
+            {state.clockInAt} 출근
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        {SITE.regularPoints.map((p) => {
+          const c = state.checks[p.id] || {};
+          return (
+            <div
+              key={p.id}
+              style={{
+                background: c.done ? KB.okSoft : "#fff",
+                border: `1px solid ${c.done ? "#B5DDC8" : KB.line}`,
+              }}
+              className="rounded-xl p-3.5 flex items-center gap-3"
+            >
+              <button
+                onClick={() => toggleDone(p.id)}
+                style={{
+                  background: c.done ? KB.ok : "#fff",
+                  border: `2px solid ${c.done ? KB.ok : KB.line}`,
+                }}
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+              >
+                {c.done && <Check size={16} color="#fff" strokeWidth={3} />}
+              </button>
+              <div className="flex-1 min-w-0">
+                <div
+                  className="font-bold text-sm flex items-center gap-1.5"
+                  style={{
+                    color: KB.navy,
+                    textDecoration: c.done ? "line-through" : "none",
+                    opacity: c.done ? 0.6 : 1,
+                  }}
+                >
+                  <span>{p.icon}</span>
+                  {p.text}
+                </div>
+              </div>
+              <button
+                onClick={() => togglePhoto(p.id)}
+                style={{
+                  background: c.photo ? KB.gold : "#fff",
+                  border: `1.5px solid ${c.photo ? KB.gold : KB.line}`,
+                  color: c.photo ? "#fff" : KB.inkSoft,
+                }}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"
+              >
+                <Camera size={14} />
+                {c.photo ? "촬영됨" : "촬영"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 오늘의 특별 작업지시 */}
+      <div className="mt-6">
+        <div
+          style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
+          className="text-[11px] font-black mb-2"
+        >
+          오늘의 특별 작업지시
+        </div>
+        <div className="space-y-2">
+          {SITE.todayOrders.map((o) => {
+            const id = "order_" + o.id;
+            const c = state.checks[id] || {};
+            return (
+              <div
+                key={o.id}
+                style={{
+                  background: c.done ? KB.okSoft : KB.goldMute,
+                  border: `1px solid ${c.done ? "#B5DDC8" : KB.goldLight}`,
+                }}
+                className="rounded-xl p-3.5 flex items-start gap-3"
+              >
+                <button
+                  onClick={() => toggleDone(id)}
+                  style={{
+                    background: c.done ? KB.ok : "#fff",
+                    border: `2px solid ${c.done ? KB.ok : "#8B6914"}`,
+                  }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                >
+                  {c.done && <Check size={16} color="#fff" strokeWidth={3} />}
+                </button>
+                <div className="flex-1 text-sm font-bold" style={{ color: KB.navy }}>
+                  {o.urgency === "high" && (
+                    <span style={{ color: KB.bad }} className="font-black mr-1">
+                      [중요]
+                    </span>
+                  )}
+                  {o.text}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <WorkerRequestPanel state={state} update={update} />
+
+      <div className="mt-8">
+        <BigButton onClick={onNext} icon={ArrowRight}>
+          다음 — 필수 사진 단계로
+        </BigButton>
+        <div className="text-center mt-2 text-xs" style={{ color: KB.inkMute }}>
+          체크 안 한 항목은 다음 단계에서 다시 안내드려요
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function WorkerRequestPanel({ state, update }) {
+  const updateResult = (id, patch) => {
+    update({
+      workResults: {
+        ...state.workResults,
+        [id]: { ...(state.workResults[id] || { resolutionType: "청소로 해결 완료", memo: "" }), ...patch },
+      },
+    });
+  };
+
+  return (
+    <div className="mt-6">
+      <div
+        style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
+        className="text-[11px] font-black mb-2"
+      >
+        병원 요청 처리
+      </div>
+      <div className="space-y-3">
+        {TODAY_WORK_REQUESTS.map((req) => {
+          const r = state.workResults[req.id] || { resolutionType: "청소로 해결 완료", memo: "" };
+          const canComplete = !!r.afterPhoto;
+          return (
+            <div
+              key={req.id}
+              style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+              className="rounded-2xl p-4"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <Pill tone={req.urgency === "high" ? "warn" : "line"}>{req.area}</Pill>
+                    {req.urgency === "high" && <Pill tone="bad">중요</Pill>}
+                  </div>
+                  <div className="mt-2 font-black text-sm" style={{ color: KB.navy }}>{req.title}</div>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: KB.inkSoft }}>{req.instruction}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <PhotoToggleButton
+                  active={!!r.beforePhoto}
+                  label="작업 전 사진"
+                  onClick={() => updateResult(req.id, { beforePhoto: !r.beforePhoto })}
+                />
+                <PhotoToggleButton
+                  active={!!r.afterPhoto}
+                  label="작업 후 사진"
+                  onClick={() => updateResult(req.id, { afterPhoto: !r.afterPhoto, completedAt: nowLabel() })}
+                />
+              </div>
+
+              <div className="mt-3">
+                <div className="text-[10px] font-black mb-1" style={{ color: KB.inkSoft, letterSpacing: "0.12em" }}>처리 결과</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {RESOLUTION_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => updateResult(req.id, { resolutionType: option })}
+                      style={{
+                        background: r.resolutionType === option ? KB.navy : "#fff",
+                        color: r.resolutionType === option ? "#fff" : KB.inkSoft,
+                        border: `1px solid ${r.resolutionType === option ? KB.navy : KB.line}`,
+                      }}
+                      className="px-2.5 py-1.5 rounded-full text-[11px] font-bold"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <textarea
+                value={r.memo || ""}
+                onChange={(e) => updateResult(req.id, { memo: e.target.value })}
+                placeholder="처리 메모, 미완료 사유, 시설/방역 가능성 등을 적어주세요."
+                style={{ borderColor: KB.line, fontFamily: fontStack }}
+                className="mt-3 w-full rounded-xl border p-3 text-xs min-h-[74px] outline-none"
+              />
+
+              <button
+                disabled={!canComplete}
+                onClick={() => updateResult(req.id, { completed: true, completedAt: nowLabel() })}
+                style={{
+                  background: canComplete ? KB.ok : "#E4E2DA",
+                  color: canComplete ? "#fff" : "#999",
+                }}
+                className="mt-3 w-full rounded-xl py-3 text-sm font-black disabled:cursor-not-allowed"
+              >
+                {canComplete ? (r.completed ? "처리완료 저장됨" : "처리완료") : "작업 후 사진 필요"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PhotoToggleButton({ active, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? KB.okSoft : "#fff",
+        border: `1.5px ${active ? "solid" : "dashed"} ${active ? KB.ok : KB.line}`,
+        color: active ? KB.ok : KB.inkSoft,
+      }}
+      className="rounded-xl py-3 text-xs font-black flex items-center justify-center gap-1.5"
+    >
+      <Camera size={15} /> {active ? `${label} 완료` : label}
+    </button>
+  );
+}
+
+/* Step 3 — 필수 사진 */
+function StepRequiredPhotos({ state, update, onNext }) {
+  const toggle = (id) => {
+    update({
+      requiredPhotos: {
+        ...state.requiredPhotos,
+        [id]: !state.requiredPhotos[id],
+      },
+    });
+  };
+  const total = SITE.requiredPhotos.length;
+  const done = SITE.requiredPhotos.filter(
+    (rp) => state.requiredPhotos[rp.id]
+  ).length;
+
+  return (
+    <div>
+      <StepHeader
+        tag="필수 증빙"
+        title="현장 공통 사진을 남겨주세요"
+        desc="월간 보고서 표지가 되는 핵심 사진입니다."
+      />
+
+      <div className="flex items-center gap-2 text-xs font-bold mb-3" style={{ color: KB.inkSoft }}>
+        <ImagePlus size={14} />
+        <span>{done} / {total} 장 완료</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        {SITE.requiredPhotos.map((rp) => {
+          const taken = state.requiredPhotos[rp.id];
+          return (
+            <button
+              key={rp.id}
+              onClick={() => toggle(rp.id)}
+              style={{
+                background: taken
+                  ? `linear-gradient(135deg, ${KB.navy}, ${KB.navyLight})`
+                  : "#fff",
+                border: `1.5px solid ${taken ? KB.navy : KB.line}`,
+                aspectRatio: "1 / 1",
+              }}
+              className="rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden"
+            >
+              {taken && (
+                <div
+                  style={{ background: KB.gold }}
+                  className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
+                >
+                  <Check size={14} color={KB.navy} strokeWidth={3} />
+                </div>
+              )}
+              <div className="text-3xl">{rp.emoji}</div>
+              <div
+                className="mt-2 text-xs font-bold text-center leading-tight"
+                style={{ color: taken ? "#fff" : KB.navy }}
+              >
+                {rp.text}
+              </div>
+              <div
+                className="mt-2 text-[10px] font-bold"
+                style={{ color: taken ? KB.goldLight : KB.inkMute }}
+              >
+                {taken ? "촬영 완료" : "탭해서 촬영"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        style={{ background: "#fff", border: `1px dashed ${KB.line}` }}
+        className="mt-4 rounded-xl p-3 text-xs flex items-start gap-2"
+      >
+        <Camera size={14} style={{ color: KB.gold }} className="mt-0.5 shrink-0" />
+        <div style={{ color: KB.inkSoft }}>
+          <b style={{ color: KB.navy }}>같은 앵글로 촬영</b>해주세요. 지난번 사진이 흐릿하게 가이드로 표시됩니다.
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <BigButton onClick={onNext} icon={ArrowRight} disabled={done < total}>
+          {done < total ? `${total - done}장 남았어요` : "다음 — 특이사항"}
+        </BigButton>
+      </div>
+    </div>
+  );
+}
+
+/* Step 4 — 특이사항 */
+function StepNotes({ state, update, onNext }) {
+  const toggleChip = (chip) => {
+    const has = state.chips.includes(chip);
+    update({
+      chips: has ? state.chips.filter((c) => c !== chip) : [...state.chips, chip],
+    });
+  };
+
+  const hasAnything =
+    state.noteMode === "none" || state.chips.length > 0 || state.text.length > 0;
+
+  return (
+    <div>
+      <StepHeader
+        tag="특이사항"
+        title="오늘 따로 보고할 게 있나요?"
+        desc="없으면 맨 위 버튼 한 번이면 끝납니다."
+      />
+
+      {/* 특이사항 없음 */}
+      <button
+        onClick={() => update({ noteMode: "none", chips: [], text: "" })}
+        style={{
+          background: state.noteMode === "none" ? KB.ok : "#fff",
+          border: `2px solid ${state.noteMode === "none" ? KB.ok : KB.line}`,
+          color: state.noteMode === "none" ? "#fff" : KB.navy,
+        }}
+        className="w-full p-5 rounded-2xl font-black text-lg flex items-center justify-center gap-2"
+      >
+        <ThumbsUp size={22} />
+        특이사항 없음
+      </button>
+
+      <div className="my-5 flex items-center gap-3">
+        <div className="flex-1 h-px" style={{ background: KB.line }} />
+        <div className="text-[10px] font-bold" style={{ color: KB.inkMute, letterSpacing: "0.2em" }}>
+          또는
+        </div>
+        <div className="flex-1 h-px" style={{ background: KB.line }} />
+      </div>
+
+      {/* 자주 쓰는 칩 */}
+      <div
+        style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
+        className="text-[11px] font-black mb-2"
+      >
+        자주 쓰는 메모
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {QUICK_CHIPS.map((c) => {
+          const on = state.chips.includes(c);
+          return (
+            <button
+              key={c}
+              onClick={() => toggleChip(c)}
+              style={{
+                background: on ? KB.navy : "#fff",
+                color: on ? "#fff" : KB.navy,
+                border: `1.5px solid ${on ? KB.navy : KB.line}`,
+              }}
+              className="px-3.5 py-2 rounded-full text-sm font-bold"
+            >
+              {on && "✓ "}{c}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 음성 / 텍스트 */}
+      <div className="mt-5 grid grid-cols-2 gap-2.5">
+        <VoiceButton state={state} update={update} />
+        <button
+          onClick={() => update({ noteMode: "text" })}
+          style={{
+            background: state.noteMode === "text" ? KB.goldMute : "#fff",
+            border: `1.5px solid ${state.noteMode === "text" ? KB.gold : KB.line}`,
+            color: KB.navy,
+          }}
+          className="rounded-xl p-3 font-bold text-sm flex flex-col items-center gap-1"
+        >
+          <FileText size={20} />
+          직접 입력
+        </button>
+      </div>
+
+      {state.noteMode === "text" && (
+        <textarea
+          value={state.text}
+          onChange={(e) => update({ text: e.target.value })}
+          placeholder="예: 6층 화장실 수도꼭지 약간 헐거움. 다음 방문 때 점검 필요"
+          style={{ borderColor: KB.line, fontFamily: fontStack }}
+          className="mt-3 w-full rounded-xl border p-3 text-sm min-h-[100px] outline-none focus:ring-2 focus:ring-offset-0"
+        />
+      )}
+
+      <div className="mt-6">
+        <BigButton onClick={onNext} icon={ArrowRight} disabled={!hasAnything}>
+          {hasAnything ? "다음 — 요약 확인" : "위에서 하나 선택해주세요"}
+        </BigButton>
+      </div>
+    </div>
+  );
+}
+
+function VoiceButton({ state, update }) {
+  const [recording, setRecording] = useState(false);
+
+  const toggle = () => {
+    if (recording) {
+      setRecording(false);
+      update({ noteMode: "voice", text: state.text || "(음성 메모 1건 첨부됨)" });
+    } else {
+      update({ noteMode: "voice" });
+      setRecording(true);
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      style={{
+        background: recording ? "#FEE2E2" : state.noteMode === "voice" ? KB.goldMute : "#fff",
+        border: `1.5px solid ${
+          recording ? "#FCA5A5" : state.noteMode === "voice" ? KB.gold : KB.line
+        }`,
+        color: recording ? "#B91C1C" : KB.navy,
+      }}
+      className="rounded-xl p-3 font-bold text-sm flex flex-col items-center gap-1"
+    >
+      {recording ? (
+        <>
+          <MicOff size={20} />
+          녹음 중지
+          <span className="text-[10px] font-bold opacity-70">탭하면 종료</span>
+        </>
+      ) : (
+        <>
+          <Mic size={20} />
+          음성 녹음
+          <span className="text-[10px] font-bold opacity-70">한 번 탭</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+/* Step 5 — 요약 + 퇴근 */
+function StepSummary({ state, update, onNext }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const doneChecks = Object.values(state.checks).filter((c) => c.done).length;
+  const totalChecks =
+    SITE.regularPoints.length + SITE.todayOrders.length;
+  const photoCount = Object.values(state.requiredPhotos).filter(Boolean).length;
+
+  const handleClockOut = () => {
+    setSubmitting(true);
+    setTimeout(() => {
+      const now = new Date();
+      const t = `${String(now.getHours()).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}`;
+      const workPayload = {
+        type: "workResultPayload",
+        처리ID: makeId("WORK"),
+        병원명: SITE.name,
+        현장ID: SITE.id,
+        작업자: SITE.staff,
+        출근시간: state.clockInAt,
+        퇴근시간: t,
+        처리시간: nowLabel(),
+        처리목록: TODAY_WORK_REQUESTS.map((req) => {
+          const result = state.workResults[req.id] || {};
+          return {
+            요청ID: req.id,
+            발생위치: req.area,
+            작업지시: req.instruction,
+            처리결과: result.resolutionType || "미입력",
+            작업전사진링크: result.beforePhoto ? buildPhotoPath({ siteName: SITE.name, fileName: `${req.area}_전.jpg` }) : "",
+            작업후사진링크: result.afterPhoto ? buildPhotoPath({ siteName: SITE.name, fileName: `${req.area}_후.jpg` }) : "",
+            처리메모: result.memo || "",
+            처리완료여부: !!result.completed,
+          };
+        }),
+        특이사항칩: state.chips,
+        특이사항텍스트: state.text,
+      };
+      postToMake("workResult", workPayload);
+      update({ clockOutAt: t });
+      onNext();
+    }, 1000);
+  };
+
+  return (
+    <div>
+      <StepHeader
+        tag="오늘 한 일"
+        title="요약 확인 후 퇴근"
+        desc="아래 내용 그대로 관리자에게 전송됩니다."
+      />
+
+      <div
+        style={{
+          background: `linear-gradient(135deg, #fff 0%, ${KB.goldMute} 100%)`,
+          border: `1px solid ${KB.line}`,
+        }}
+        className="rounded-2xl p-5"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold" style={{ color: KB.gold, letterSpacing: "0.15em" }}>
+              DAILY REPORT
+            </div>
+            <div className="text-xl font-black mt-1" style={{ color: KB.navy }}>
+              {SITE.name}
+            </div>
+          </div>
+          <Brand size="md" />
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <SummaryCell label="출근" value={state.clockInAt || "—"} />
+          <SummaryCell label="체크" value={`${doneChecks}/${totalChecks}`} />
+          <SummaryCell label="사진" value={`${photoCount}장`} />
+        </div>
+
+        <div
+          style={{ borderTop: `1px dashed ${KB.line}` }}
+          className="mt-4 pt-4 text-sm"
+        >
+          <div
+            className="text-[11px] font-black mb-1"
+            style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
+          >
+            특이사항
+          </div>
+          {state.noteMode === "none" && (
+            <div style={{ color: KB.ok }} className="font-bold">
+              ✓ 특이사항 없음
+            </div>
+          )}
+          {state.chips.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {state.chips.map((c) => (
+                <Pill key={c} tone="gold">{c}</Pill>
+              ))}
+            </div>
+          )}
+          {state.text && state.noteMode !== "none" && (
+            <div className="mt-2" style={{ color: KB.navy }}>
+              {state.text}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <BigButton
+          onClick={handleClockOut}
+          icon={submitting ? null : LogOut}
+          tone="primary"
+          disabled={submitting}
+        >
+          {submitting ? "전송 중..." : "퇴근하고 보고서 보내기"}
+        </BigButton>
+        <button
+          className="w-full mt-3 text-sm font-bold"
+          style={{ color: KB.inkSoft }}
+        >
+          오늘 다른 현장도 가야 해요
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCell({ label, value }) {
+  return (
+    <div
+      style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+      className="rounded-xl p-3 text-center"
+    >
+      <div
+        className="text-[10px] font-bold"
+        style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
+      >
+        {label}
+      </div>
+      <div className="mt-0.5 text-lg font-black" style={{ color: KB.navy }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/* Step 6 — 완료 */
+function StepDone({ onExit }) {
+  return (
+    <div className="text-center py-12">
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 200, damping: 14 }}
+        style={{
+          background: `radial-gradient(circle at 30% 30%, ${KB.gold}, #B89548)`,
+          boxShadow: `0 20px 50px -10px ${KB.gold}66`,
+        }}
+        className="w-32 h-32 rounded-full mx-auto flex items-center justify-center"
+      >
+        <Check size={64} color={KB.navy} strokeWidth={3} />
+      </motion.div>
+      <h2
+        className="mt-8 text-3xl font-black"
+        style={{ color: KB.navy, letterSpacing: "-0.03em" }}
+      >
+        수고하셨습니다!
+      </h2>
+      <p className="mt-3 text-sm" style={{ color: KB.inkSoft }}>
+        오늘의 보고서가 관리자에게 전송되었습니다.<br />
+        편안한 하루 되세요.
+      </p>
+      <div className="mt-10 max-w-xs mx-auto">
+        <BigButton onClick={onExit} tone="ghost">
+          처음 화면으로
+        </BigButton>
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════
+   ▒▒ 병원 앱 ▒▒
+   ═════════════════════════════════════════════ */
+function HospitalApp({ onExit }) {
+  const [tab, setTab] = useState("report"); // home, request, mine, report
+  const [hospitalRequests, setHospitalRequests] = useState(MY_REQUESTS);
+
+  const handleCreateRequest = (payload) => {
+    const item = {
+      id: payload.요청ID,
+      type: payload.요청유형,
+      urgency: payload.긴급도 === "긴급" || payload.긴급도 === "VIP" ? "high" : "normal",
+      title: `${payload.발생위치} · ${payload.문제유형 || payload.요청유형}`,
+      status: "접수됨",
+      registeredAt: payload.접수시간,
+      completedAt: "",
+      payload,
+      timeline: [
+        { label: "요청 접수", time: payload.접수시간, done: true },
+        { label: "관리자 확인", time: "대기 중", done: false },
+        { label: "작업자 전달", time: "대기 중", done: false },
+        { label: "작업 중", time: "대기 중", done: false },
+        { label: "처리 완료", time: "대기 중", done: false },
+        { label: "병원 확인", time: "대기 중", done: false },
+      ],
+    };
+    setHospitalRequests((prev) => [item, ...prev]);
+    postToMake("request", payload);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: KB.bg }}>
+      {/* 상단 헤더 */}
+      <header
+        style={{ background: "#fff", borderBottom: `1px solid ${KB.line}` }}
+        className="sticky top-0 z-30"
+      >
+        <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={onExit}
+            className="flex items-center gap-1 text-xs font-semibold"
+            style={{ color: KB.inkSoft }}
+          >
+            <ArrowLeft size={16} /> 역할
+          </button>
+          <div className="text-center">
+            <div
+              className="text-[10px] font-bold"
+              style={{ color: KB.gold, letterSpacing: "0.18em" }}
+            >
+              HOSPITAL
+            </div>
+            <div className="text-sm font-black" style={{ color: KB.navy, letterSpacing: "-0.02em" }}>
+              리투의원
+            </div>
+          </div>
+          <Brand size="md" />
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-md mx-auto w-full pb-24">
+        {tab === "home" && <HospHome setTab={setTab} />}
+        {tab === "request" && <HospNewRequest setTab={setTab} onCreateRequest={handleCreateRequest} />}
+        {tab === "mine" && <HospMyRequests setTab={setTab} requests={hospitalRequests} />}
+        {tab === "report" && <HospMonthlyReport requests={hospitalRequests} />}
+      </main>
+
+      {/* 하단 탭 */}
+      <nav
+        style={{ background: "#fff", borderTop: `1px solid ${KB.line}` }}
+        className="fixed bottom-0 inset-x-0 z-30"
+      >
+        <div className="max-w-md mx-auto px-2 py-2 grid grid-cols-4 gap-1">
+          <HospTab icon={Hospital} label="홈" active={tab === "home"} onClick={() => setTab("home")} />
+          <HospTab icon={Plus} label="요청" active={tab === "request"} onClick={() => setTab("request")} />
+          <HospTab icon={ClipboardList} label="내 요청" active={tab === "mine"} onClick={() => setTab("mine")} />
+          <HospTab icon={FileText} label="보고서" active={tab === "report"} onClick={() => setTab("report")} />
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+function HospTab({ icon: Icon, label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{ color: active ? KB.navy : KB.inkMute }}
+      className="flex flex-col items-center gap-0.5 py-2 rounded-lg"
+    >
+      <Icon size={20} strokeWidth={active ? 2.6 : 2} />
+      <span className="text-[10px] font-bold">{label}</span>
+    </button>
+  );
+}
+
+function HospHome({ setTab }) {
+  return (
+    <div className="px-4 pt-4 space-y-3">
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${KB.navyDeep}, ${KB.navy})`,
+        }}
+        className="rounded-2xl p-5 text-white relative overflow-hidden"
+      >
+        <div
+          style={{ background: KB.gold, opacity: 0.2 }}
+          className="absolute -right-10 -top-10 w-40 h-40 rounded-full blur-2xl"
+        />
+        <div className="relative">
+          <div
+            className="text-[10px] font-bold"
+            style={{ color: KB.goldLight, letterSpacing: "0.2em" }}
+          >
+            KB CLEAN × 리투의원
+          </div>
+          <div className="mt-2 text-2xl font-black leading-tight" style={{ letterSpacing: "-0.02em" }}>
+            요청은 24시간 내<br />
+            처리해 드립니다.
+          </div>
+          <div className="mt-4 text-xs opacity-80">
+            담당 매니저 박원준 · 010-XXXX-XXXX
+          </div>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setTab("request")}
+        style={{ background: KB.gold }}
+        className="w-full rounded-2xl p-5 text-left flex items-center gap-4"
+      >
+        <div
+          style={{ background: "#fff" }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center"
+        >
+          <Plus size={24} color={KB.navy} strokeWidth={2.5} />
+        </div>
+        <div style={{ color: KB.navy }}>
+          <div className="font-black text-base">새 요청 / 컴플레인 등록</div>
+          <div className="text-xs mt-0.5 opacity-80">사진과 함께 빠르게 전달</div>
+        </div>
+      </button>
+
+      <div className="grid grid-cols-2 gap-3">
+        <HomeQuickCard
+          icon={ClipboardList}
+          label="내 요청 보기"
+          sub="3건 진행 중"
+          onClick={() => setTab("mine")}
+        />
+        <HomeQuickCard
+          icon={FileText}
+          label="11월 보고서"
+          sub="새 보고서 도착"
+          onClick={() => setTab("report")}
+          highlight
+        />
+      </div>
+    </div>
+  );
+}
+
+function HomeQuickCard({ icon: Icon, label, sub, onClick, highlight }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: highlight ? KB.goldMute : "#fff",
+        border: `1px solid ${highlight ? KB.goldLight : KB.line}`,
+      }}
+      className="rounded-2xl p-4 text-left relative"
+    >
+      {highlight && (
+        <div
+          style={{ background: KB.bad }}
+          className="absolute top-3 right-3 w-2 h-2 rounded-full"
+        />
+      )}
+      <Icon size={20} color={KB.navy} />
+      <div className="mt-2 text-sm font-black" style={{ color: KB.navy }}>
+        {label}
+      </div>
+      <div className="text-[11px] mt-0.5" style={{ color: KB.inkSoft }}>
+        {sub}
+      </div>
+    </button>
+  );
+}
+
+/* 새 요청 — 칩 선택 + Google Sheets payload 생성 */
+function HospNewRequest({ setTab, onCreateRequest }) {
+  const [form, setForm] = useState({
+    type: "요청",
+    urgency: "보통",
+    issue: "",
+    location: "",
+    body: "",
+    photo: false,
+  });
+  const [sent, setSent] = useState(false);
+  const [payloadPreview, setPayloadPreview] = useState(null);
+
+  const canSubmit = form.issue && form.location && form.body;
+
+  const submit = () => {
+    if (!canSubmit) return;
+    const requestId = makeId("REQ");
+    const photoLink = form.photo
+      ? buildPhotoPath({ siteName: SITE.name, fileName: `${form.location}_${form.issue}.jpg` })
+      : "";
+    const payload = {
+      type: "requestPayload",
+      요청ID: requestId,
+      병원명: SITE.name,
+      현장ID: SITE.id,
+      요청유형: form.type,
+      문제유형: form.issue,
+      긴급도: form.urgency,
+      발생위치: form.location,
+      요청내용: form.body,
+      사진링크: photoLink,
+      접수시간: nowLabel(),
+      처리상태: "접수됨",
+      담당작업자: SITE.staff,
+      직원공유여부: false,
+      처리완료시간: "",
+      재요청여부: false,
+      저장대상시트: "요청사항_DB",
+      예상사진저장경로: form.photo ? photoLink : "사진 없음",
+    };
+    setPayloadPreview(payload);
+    onCreateRequest?.(payload);
+    setSent(true);
+  };
+
+  if (sent) {
+    return (
+      <div className="px-4 pt-10 text-center">
+        <div
+          style={{ background: KB.okSoft }}
+          className="w-20 h-20 mx-auto rounded-full flex items-center justify-center"
+        >
+          <CheckCircle2 size={40} color={KB.ok} />
+        </div>
+        <h2 className="mt-6 text-xl font-black" style={{ color: KB.navy }}>
+          요청 등록 완료
+        </h2>
+        <p className="mt-2 text-sm" style={{ color: KB.inkSoft }}>
+          요청사항_DB로 저장할 payload가 생성되었습니다.<br />담당 매니저가 확인 후 처리상태를 업데이트합니다.
+        </p>
+        {payloadPreview && (
+          <div
+            style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+            className="mt-5 text-left rounded-2xl p-4 text-[11px] overflow-auto"
+          >
+            <div className="font-black mb-2" style={{ color: KB.navy }}>requestPayload</div>
+            <pre className="whitespace-pre-wrap" style={{ color: KB.inkSoft }}>{JSON.stringify(payloadPreview, null, 2)}</pre>
+          </div>
+        )}
+        <div className="mt-6 max-w-xs mx-auto space-y-2">
+          <BigButton onClick={() => setTab("mine")} icon={ClipboardList}>
+            내 요청 확인
+          </BigButton>
+          <BigButton onClick={() => setTab("home")} tone="ghost">
+            홈으로
+          </BigButton>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 pt-4 space-y-4">
+      <h2 className="text-xl font-black" style={{ color: KB.navy, letterSpacing: "-0.02em" }}>
+        새 요청 등록
+      </h2>
+
+      <FormField label="구분">
+        <div className="grid grid-cols-2 gap-2">
+          <Choice active={form.type === "요청"} onClick={() => setForm({ ...form, type: "요청" })}>요청사항</Choice>
+          <Choice active={form.type === "컴플레인"} tone="bad" onClick={() => setForm({ ...form, type: "컴플레인" })}>컴플레인</Choice>
+        </div>
+      </FormField>
+
+      <FormField label="어떤 문제가 있나요?">
+        <ChipPicker
+          options={ISSUE_OPTIONS}
+          value={form.issue}
+          onPick={(issue) => setForm({ ...form, issue })}
+        />
+      </FormField>
+
+      <FormField label="발생 위치">
+        <ChipPicker
+          options={LOCATION_OPTIONS}
+          value={form.location}
+          onPick={(location) => setForm({ ...form, location })}
+        />
+        <input
+          value={form.location}
+          onChange={(e) => setForm({ ...form, location: e.target.value })}
+          placeholder="직접 입력도 가능합니다. 예: 6층 파우더룸"
+          style={{ borderColor: KB.line, fontFamily: fontStack }}
+          className="mt-2 w-full rounded-xl border px-4 py-3 text-sm outline-none"
+        />
+      </FormField>
+
+      <FormField label="긴급도">
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { v: "낮음", label: "낮음" },
+            { v: "보통", label: "보통" },
+            { v: "긴급", label: "긴급" },
+            { v: "VIP", label: "VIP" },
+          ].map((u) => (
+            <Choice key={u.v} active={form.urgency === u.v} onClick={() => setForm({ ...form, urgency: u.v })}>{u.label}</Choice>
+          ))}
+        </div>
+      </FormField>
+
+      <FormField label="내용">
+        <textarea
+          value={form.body}
+          onChange={(e) => setForm({ ...form, body: e.target.value })}
+          placeholder="상황을 자유롭게 적어주세요. 예: 오전에 파우더룸 바닥에 머리카락이 보였습니다."
+          style={{ borderColor: KB.line, fontFamily: fontStack }}
+          className="w-full rounded-xl border px-4 py-3 text-sm outline-none min-h-[120px]"
+        />
+      </FormField>
+
+      <FormField label="사진 첨부 (선택)">
+        <button
+          onClick={() => setForm({ ...form, photo: !form.photo })}
+          style={{
+            background: form.photo ? KB.goldMute : "#fff",
+            border: `1.5px ${form.photo ? "solid" : "dashed"} ${form.photo ? KB.gold : KB.line}`,
+            color: KB.navy,
+          }}
+          className="w-full rounded-xl py-5 font-bold text-sm flex flex-col items-center gap-2"
+        >
+          <Camera size={24} />
+          {form.photo ? "사진 1장 첨부됨 · Google Drive 링크 저장 예정" : "사진 찍기 / 선택"}
+        </button>
+      </FormField>
+
+      <div
+        style={{ background: KB.goldMute, border: `1px solid ${KB.goldLight}` }}
+        className="rounded-xl p-3 text-xs leading-relaxed"
+      >
+        <b style={{ color: KB.navy }}>저장 구조</b>
+        <div style={{ color: KB.inkSoft }} className="mt-1">
+          요청은 요청사항_DB에 저장하고, 사진 원본은 Google Drive에 저장한 뒤 시트에는 사진 링크만 남기는 구조입니다.
+        </div>
+      </div>
+
+      <div className="pt-2">
+        <BigButton onClick={submit} icon={Send} disabled={!canSubmit}>
+          요청 전송
+        </BigButton>
+      </div>
+    </div>
+  );
+}
+
+function ChipPicker({ options, value, onPick }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const active = value === option;
+        return (
+          <button
+            key={option}
+            onClick={() => onPick(option)}
+            style={{
+              background: active ? KB.navy : "#fff",
+              color: active ? "#fff" : KB.inkSoft,
+              border: `1.5px solid ${active ? KB.navy : KB.line}`,
+            }}
+            className="px-3 py-2 rounded-full text-xs font-bold"
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FormField({ label, children }) {
+  return (
+    <div>
+      <div
+        className="text-xs font-black mb-1.5"
+        style={{ color: KB.navy, letterSpacing: "-0.01em" }}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Choice({ active, children, onClick, tone = "navy" }) {
+  const colors = {
+    navy: { bg: KB.navy, color: "#fff" },
+    bad: { bg: KB.bad, color: "#fff" },
+  };
+  const c = colors[tone];
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? c.bg : "#fff",
+        color: active ? c.color : KB.inkSoft,
+        border: `1.5px solid ${active ? c.bg : KB.line}`,
+      }}
+      className="rounded-xl py-3 font-bold text-sm"
+    >
+      {children}
+    </button>
+  );
+}
+
+/* 내 요청 */
+function HospMyRequests({ requests = MY_REQUESTS }) {
+  return (
+    <div className="px-4 pt-4 space-y-3">
+      <h2 className="text-xl font-black" style={{ color: KB.navy, letterSpacing: "-0.02em" }}>
+        내 요청 현황
+      </h2>
+      {requests.map((r) => (
+        <div
+          key={r.id}
+          style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+          className="rounded-2xl p-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Pill tone={r.type === "컴플레인" ? "bad" : "navy"}>{r.type}</Pill>
+              {r.urgency === "high" && <Pill tone="warn">긴급</Pill>}
+            </div>
+            <Pill tone={r.status === "완료" || r.status === "처리완료" ? "ok" : r.status === "접수됨" ? "gold" : "gold"}>{r.status}</Pill>
+          </div>
+          <div className="mt-2.5 font-black text-base" style={{ color: KB.navy }}>
+            {r.title}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <div style={{ color: KB.inkMute }}>등록</div>
+              <div className="font-bold mt-0.5" style={{ color: KB.navy }}>{r.registeredAt}</div>
+            </div>
+            <div>
+              <div style={{ color: KB.inkMute }}>완료</div>
+              <div className="font-bold mt-0.5" style={{ color: KB.navy }}>{r.completedAt || "처리 중"}</div>
+            </div>
+          </div>
+          <RequestStatusTimeline request={r} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RequestStatusTimeline({ request }) {
+  const preset = request.timeline || [
+    { label: "요청 접수", time: request.registeredAt, done: true },
+    { label: "관리자 확인", time: request.status === "처리중" || request.status === "완료" ? "확인 완료" : "대기 중", done: request.status !== "접수됨" },
+    { label: "작업자 전달", time: request.status === "처리중" || request.status === "완료" ? "전달 완료" : "대기 중", done: request.status === "처리중" || request.status === "완료" },
+    { label: "작업 중", time: request.status === "처리중" ? "진행 중" : request.status === "완료" ? "완료" : "대기 중", done: request.status === "처리중" || request.status === "완료" },
+    { label: "처리 완료", time: request.completedAt || "대기 중", done: request.status === "완료" },
+    { label: "병원 확인", time: request.status === "완료" ? "확인 가능" : "대기 중", done: request.status === "완료" },
+  ];
+  return (
+    <div className="mt-4 rounded-xl p-3" style={{ background: KB.bg, border: `1px solid ${KB.line}` }}>
+      <div className="text-[10px] font-black mb-2" style={{ color: KB.gold, letterSpacing: "0.16em" }}>처리 타임라인</div>
+      <div className="space-y-2">
+        {preset.map((step, i) => (
+          <div key={step.label} className="flex items-start gap-2 text-xs">
+            <div
+              style={{ background: step.done ? KB.navy : "#fff", border: `1.5px solid ${step.done ? KB.navy : KB.line}` }}
+              className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+            >
+              {step.done ? <Check size={12} color="#fff" strokeWidth={3} /> : <Circle size={10} color={KB.inkMute} />}
+            </div>
+            <div className="flex-1">
+              <div className="font-black" style={{ color: step.done ? KB.navy : KB.inkSoft }}>{step.label}</div>
+              <div style={{ color: KB.inkMute }}>{step.time}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   ▒ 월간 보고서 ▒  (핵심 자산)
+   ───────────────────────────────────────────── */
+function HospMonthlyReport({ requests = MY_REQUESTS }) {
+  return (
+    <div className="bg-white">
+      {/* 월 선택 */}
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between" style={{ background: KB.bg }}>
+        <div>
+          <div
+            className="text-[10px] font-bold"
+            style={{ color: KB.gold, letterSpacing: "0.2em" }}
+          >
+            MONTHLY HYGIENE REPORT
+          </div>
+          <div className="text-lg font-black mt-0.5" style={{ color: KB.navy, letterSpacing: "-0.02em" }}>
+            {REPORT.month}
+          </div>
+        </div>
+        <button
+          style={{ background: "#fff", border: `1px solid ${KB.line}`, color: KB.navy }}
+          className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1"
+        >
+          {REPORT.prevMonth} 비교 <ChevronRight size={14} />
+        </button>
+      </div>
+
+      <ReportCover />
+      <ReportKPI />
+      <ReportCalendar />
+      <ReportRegularPoints />
+      <ReportRequestHistory />
+      <ReportGallery />
+      <ReportManagerComment />
+      <ReportDownload />
+    </div>
+  );
+}
+
+function ReportCover() {
+  return (
+    <section
+      style={{
+        background: `linear-gradient(135deg, ${KB.navyDeep} 0%, ${KB.navy} 60%, ${KB.navyLight} 100%)`,
+      }}
+      className="text-white px-6 py-10 relative overflow-hidden"
+    >
+      <div
+        style={{ background: KB.gold, opacity: 0.18 }}
+        className="absolute -right-16 -top-16 w-72 h-72 rounded-full blur-3xl"
+      />
+      <div
+        style={{ background: KB.gold, opacity: 0.08 }}
+        className="absolute -left-20 bottom-0 w-60 h-60 rounded-full blur-3xl"
+      />
+      <div className="relative">
+        <div
+          style={{ color: KB.goldLight, letterSpacing: "0.22em" }}
+          className="text-[11px] font-bold"
+        >
+          {REPORT.month} 위생관리 리포트
+        </div>
+        <h1
+          style={{ letterSpacing: "-0.03em" }}
+          className="mt-3 text-4xl font-black leading-[1.1]"
+        >
+          {REPORT.hospital}
+        </h1>
+        <div className="mt-2 text-sm opacity-80">
+          정기 위생관리 결과 보고
+        </div>
+
+        <div className="mt-8 pt-6 border-t border-white/15 grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div className="text-[10px] font-bold uppercase opacity-60">
+              담당 매니저
+            </div>
+            <div className="mt-1 font-black text-base">
+              {REPORT.manager}
+            </div>
+            <div className="text-xs opacity-70">KB클린 대표</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase opacity-60">
+              현장 작업자
+            </div>
+            <div className="mt-1 font-black text-base">{REPORT.staff}</div>
+            <div className="text-xs opacity-70">{REPORT.staffNote}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReportKPI() {
+  return (
+    <section className="px-5 py-7">
+      <SectionHeader tag="이번 달 한눈에" title="핵심 지표" />
+      <div className="grid grid-cols-2 gap-3">
+        {REPORT.kpi.map((k) => (
+          <div
+            key={k.label}
+            style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+            className="rounded-2xl p-4"
+          >
+            <div
+              className="text-[10px] font-bold"
+              style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
+            >
+              {k.label}
+            </div>
+            <div
+              className="mt-1 text-3xl font-black"
+              style={{ color: KB.navy, letterSpacing: "-0.03em" }}
+            >
+              {k.value}
+            </div>
+            <div className="text-[11px] mt-1.5 font-bold" style={{ color: KB.gold }}>
+              {k.sub}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReportCalendar() {
+  const [pick, setPick] = useState(null);
+
+  // 첫 주에 빈 칸 채우기 (1일이 토요일이라고 가정 — 데이터에 맞춰)
+  const firstDay = REPORT.calendar[0].w;
+  const dayOrder = ["일", "월", "화", "수", "목", "금", "토"];
+  const blanks = dayOrder.indexOf(firstDay);
+
+  const statusColor = (s) => {
+    if (s === "visit") return { bg: KB.navy, color: "#fff", label: "정시 방문" };
+    if (s === "warn") return { bg: KB.warn, color: "#fff", label: "특이사항" };
+    if (s === "extra") return { bg: KB.gold, color: KB.navy, label: "추가 방문" };
+    return { bg: "transparent", color: KB.inkMute, label: "비번" };
+  };
+
+  return (
+    <section className="px-5 py-7" style={{ background: KB.bg }}>
+      <SectionHeader tag="방문 캘린더" title="이번 달 출근 현황" />
+
+      <div
+        style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+        className="rounded-2xl p-4"
+      >
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold mb-2" style={{ color: KB.inkMute, letterSpacing: "0.1em" }}>
+          {dayOrder.map((d) => (
+            <div key={d}>{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: blanks }).map((_, i) => (
+            <div key={"b" + i} />
+          ))}
+          {REPORT.calendar.map((c) => {
+            const s = statusColor(c.s);
+            const isVisit = c.s === "visit" || c.s === "warn" || c.s === "extra";
+            return (
+              <button
+                key={c.d}
+                onClick={() => isVisit && setPick(c)}
+                style={{
+                  background: s.bg,
+                  color: s.color,
+                  border: isVisit ? "none" : `1px solid ${KB.line}`,
+                  aspectRatio: "1 / 1",
+                }}
+                className="rounded-lg text-xs font-black flex items-center justify-center"
+              >
+                {c.d}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
+          <LegendDot color={KB.navy} label="정시 방문 12회" />
+          <LegendDot color={KB.gold} label="추가 방문 1회" />
+          <LegendDot color={KB.warn} label="특이사항 1일" />
+          <LegendDot color={KB.line} label="비번일" border />
+        </div>
+      </div>
+
+      {pick && (
+        <div
+          style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+          className="mt-3 rounded-xl p-4"
+        >
+          <div className="flex items-center justify-between">
+            <div className="font-black" style={{ color: KB.navy }}>
+              11월 {pick.d}일 ({pick.w}요일)
+            </div>
+            <Pill tone={pick.s === "warn" ? "warn" : "navy"}>
+              {statusColor(pick.s).label}
+            </Pill>
+          </div>
+          <div className="mt-2 text-xs space-y-1" style={{ color: KB.inkSoft }}>
+            <div>· 08:35 도착 / 10:12 종료</div>
+            <div>· 정기 점검 7/7 완료 · 사진 11장</div>
+            {pick.s === "warn" && (
+              <div style={{ color: KB.warn }} className="font-bold">
+                · 파우더룸 컴플레인 발생 → 다음날 처리 완료
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LegendDot({ color, label, border }) {
+  return (
+    <div className="flex items-center gap-1.5" style={{ color: KB.inkSoft }}>
+      <div
+        style={{
+          background: color,
+          border: border ? `1px solid ${KB.line}` : "none",
+        }}
+        className="w-3 h-3 rounded-sm"
+      />
+      <span className="font-bold">{label}</span>
+    </div>
+  );
+}
+
+function ReportRegularPoints() {
+  return (
+    <section className="px-5 py-7">
+      <SectionHeader
+        tag="정기 관리 포인트"
+        title="병원 요청 항목 점검 현황"
+      />
+      <div className="space-y-2">
+        {REPORT.regularPoints.map((p) => (
+          <div
+            key={p.name}
+            style={{
+              background: p.highlighted ? KB.goldMute : "#fff",
+              border: `1px solid ${p.highlighted ? KB.goldLight : KB.line}`,
+            }}
+            className="rounded-xl p-3.5 flex items-center gap-3"
+          >
+            <div
+              style={{
+                background: p.highlighted ? "#fff" : KB.bg,
+                fontSize: 20,
+              }}
+              className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+            >
+              {p.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-black text-sm flex items-center gap-1.5" style={{ color: KB.navy }}>
+                {p.name}
+                {p.highlighted && (
+                  <Star size={12} fill={KB.gold} strokeWidth={0} />
+                )}
+              </div>
+              {p.hlNote && (
+                <div className="text-[10px] font-bold mt-0.5" style={{ color: "#8B6914" }}>
+                  ★ {p.hlNote}
+                </div>
+              )}
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-xs font-bold" style={{ color: KB.navy }}>
+                {p.visits}회 점검
+              </div>
+              <div className="text-[10px]" style={{ color: KB.inkSoft }}>
+                사진 {p.photos}장
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReportRequestHistory() {
+  return (
+    <section className="px-5 py-7" style={{ background: KB.bg }}>
+      <SectionHeader
+        tag="요청·컴플레인 처리"
+        title="이번 달 처리 내역"
+      />
+      <div className="space-y-4">
+        {REPORT.requests.map((r) => (
+          <RequestReportCard key={r.id} r={r} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RequestReportCard({ r }) {
+  return (
+    <div
+      style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+      className="rounded-2xl overflow-hidden"
+    >
+      {/* 헤더 */}
+      <div
+        style={{
+          background:
+            r.type === "컴플레인" ? KB.badSoft : KB.bg,
+          borderBottom: `1px solid ${KB.line}`,
+        }}
+        className="px-4 py-3 flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[10px] font-black"
+            style={{ color: KB.inkSoft, letterSpacing: "0.1em" }}
+          >
+            {r.no}
+          </span>
+          <Pill tone={r.type === "컴플레인" ? "bad" : "navy"}>{r.type}</Pill>
+          {r.urgency === "high" && <Pill tone="warn">긴급</Pill>}
+        </div>
+        <div className="flex items-center gap-1 text-[11px] font-black" style={{ color: KB.gold }}>
+          <Clock size={12} /> {r.duration} 처리
+        </div>
+      </div>
+
+      <div className="px-4 py-4">
+        <h4 className="font-black text-base" style={{ color: KB.navy, letterSpacing: "-0.01em" }}>
+          {r.title}
+        </h4>
+
+        {/* 병원 원문 */}
+        <div
+          style={{ background: KB.bg, border: `1px solid ${KB.line}` }}
+          className="mt-3 rounded-xl p-3"
+        >
+          <div className="text-[10px] font-black mb-1" style={{ color: KB.inkSoft, letterSpacing: "0.1em" }}>
+            병원 요청 원문 · {r.registeredAt}
+          </div>
+          <p className="text-sm" style={{ color: KB.inkSoft }}>
+            "{r.original}"
+          </p>
+        </div>
+
+        {/* 화살표 */}
+        <div className="flex items-center justify-center my-2">
+          <div className="w-0.5 h-4" style={{ background: KB.line }} />
+        </div>
+
+        {/* 관리자 작업지시 */}
+        <div
+          style={{ background: KB.goldMute, border: `1px solid ${KB.goldLight}` }}
+          className="rounded-xl p-3"
+        >
+          <div className="text-[10px] font-black mb-1" style={{ color: "#8B6914", letterSpacing: "0.1em" }}>
+            관리자 작업지시 · 담당 {r.assignee}
+          </div>
+          <p className="text-sm font-bold" style={{ color: KB.navy }}>
+            {r.adminInstruction}
+          </p>
+        </div>
+
+        {/* 사진 전후 */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <PhotoSlot label="처리 전" tone="bad" />
+          <PhotoSlot label="처리 후" tone="ok" />
+        </div>
+
+        <div
+          style={{ borderTop: `1px dashed ${KB.line}` }}
+          className="mt-3 pt-3 flex items-center justify-between text-xs"
+        >
+          <div style={{ color: KB.inkSoft }}>
+            완료: {r.completedAt}
+          </div>
+          <div
+            style={{ color: KB.ok }}
+            className="flex items-center gap-1 font-black"
+          >
+            <CheckCircle2 size={14} /> 병원 확인 ({r.confirmedAt})
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhotoSlot({ label, tone }) {
+  const colors =
+    tone === "bad"
+      ? { bg: "#FCE8DC", border: KB.bad }
+      : { bg: KB.okSoft, border: KB.ok };
+  return (
+    <div
+      style={{
+        background: colors.bg,
+        border: `1px solid ${colors.border}40`,
+        aspectRatio: "4 / 3",
+      }}
+      className="rounded-xl flex flex-col items-center justify-center relative"
+    >
+      <Camera size={24} color={colors.border} />
+      <div
+        className="mt-1 text-[10px] font-black"
+        style={{ color: colors.border, letterSpacing: "0.15em" }}
+      >
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function ReportGallery() {
+  return (
+    <section className="px-5 py-7">
+      <SectionHeader
+        tag="포토 갤러리"
+        title="같은 앵글, 4주간 변화"
+      />
+      <div className="space-y-4">
+        {REPORT.galleries.map((g) => (
+          <div key={g.key}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">{g.icon}</span>
+              <span className="font-black text-sm" style={{ color: KB.navy }}>
+                {g.title}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {g.photos.map((w) => (
+                <div
+                  key={w}
+                  style={{
+                    background: `linear-gradient(135deg, ${KB.goldMute} 0%, #fff 100%)`,
+                    border: `1px solid ${KB.line}`,
+                    aspectRatio: "3 / 4",
+                  }}
+                  className="rounded-lg flex flex-col items-center justify-center"
+                >
+                  <Camera size={16} color={KB.inkMute} />
+                  <div
+                    className="mt-1 text-[9px] font-black"
+                    style={{ color: KB.inkSoft, letterSpacing: "0.1em" }}
+                  >
+                    {w}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReportManagerComment() {
+  return (
+    <section className="px-5 py-7" style={{ background: KB.bg }}>
+      <SectionHeader
+        tag="담당 매니저 코멘트"
+        title="이번 달을 돌아보며"
+      />
+      <div
+        style={{
+          background: `linear-gradient(135deg, #fff 0%, ${KB.goldMute} 100%)`,
+          border: `1px solid ${KB.goldLight}`,
+        }}
+        className="rounded-2xl p-5"
+      >
+        <p
+          className="text-sm whitespace-pre-line leading-relaxed"
+          style={{ color: KB.navy }}
+        >
+          {REPORT.comment}
+        </p>
+        <div
+          style={{ borderTop: `1px dashed ${KB.gold}` }}
+          className="mt-5 pt-4 flex items-center justify-end gap-2"
+        >
+          <div className="text-right">
+            <div
+              className="text-[10px] font-bold"
+              style={{ color: "#8B6914", letterSpacing: "0.15em" }}
+            >
+              KB CLEAN
+            </div>
+            <div className="font-black text-base" style={{ color: KB.navy, letterSpacing: "-0.02em" }}>
+              박원준 드림
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 다음 달 약속 */}
+      <div className="mt-5">
+        <div
+          className="text-[10px] font-black mb-2"
+          style={{ color: KB.gold, letterSpacing: "0.2em" }}
+        >
+          📅 다음 달 강화 포인트
+        </div>
+        <div className="space-y-2">
+          {REPORT.nextMonth.map((n, i) => (
+            <div
+              key={i}
+              style={{ background: "#fff", border: `1px solid ${KB.line}` }}
+              className="rounded-xl p-3 flex items-start gap-3"
+            >
+              <div
+                style={{ background: KB.navy, color: "#fff" }}
+                className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-black text-xs"
+              >
+                {i + 1}
+              </div>
+              <div className="flex-1 text-sm font-bold" style={{ color: KB.navy }}>
+                {n}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReportDownload() {
+  return (
+    <section className="px-5 py-8">
+      <div
+        style={{
+          background: `linear-gradient(135deg, ${KB.navyDeep}, ${KB.navy})`,
+        }}
+        className="rounded-2xl p-5 text-white"
+      >
+        <div className="text-center">
+          <div
+            className="text-[10px] font-bold"
+            style={{ color: KB.goldLight, letterSpacing: "0.2em" }}
+          >
+            REPORT EXPORT
+          </div>
+          <div className="mt-1 text-lg font-black" style={{ letterSpacing: "-0.02em" }}>
+            보고서를 보관하시겠어요?
+          </div>
+          <div className="text-xs opacity-70 mt-1">
+            원장님 결재용 · 위생점검 증빙용
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <button
+            style={{ background: KB.gold, color: KB.navy }}
+            className="w-full rounded-xl py-3.5 font-black text-sm flex items-center justify-center gap-2"
+          >
+            <Download size={18} />
+            PDF로 저장하기
+          </button>
+          <button
+            style={{
+              background: "transparent",
+              border: "1.5px solid rgba(255,255,255,0.3)",
+            }}
+            className="w-full rounded-xl py-3.5 font-bold text-sm flex items-center justify-center gap-2 text-white"
+          >
+            <Send size={16} />
+            이메일로 받기
+          </button>
+        </div>
+      </div>
+
+      <div className="text-center mt-6 text-[11px]" style={{ color: KB.inkMute }}>
+        본 리포트는 KB클린 자동 생성 시스템으로 발행되었습니다.<br />
+        문의 / 다음 달 요청 사항이 있으시면 담당 매니저에게 연락 주세요.
+      </div>
+    </section>
+  );
+}
+
+function SectionHeader({ tag, title, right }) {
+  return (
+    <div className="mb-4 flex items-end justify-between">
+      <div>
+        <div
+          className="text-[10px] font-black"
+          style={{ color: KB.gold, letterSpacing: "0.2em" }}
+        >
+          {tag}
+        </div>
+        <h3
+          className="mt-1 text-lg font-black"
+          style={{ color: KB.navy, letterSpacing: "-0.025em" }}
+        >
+          {title}
+        </h3>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════
+   ▒▒ 관리자 (placeholder — 추후 별도 화면) ▒▒
+   ═════════════════════════════════════════════ */
+function AdminPlaceholder({ onExit }) {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header
+        style={{ background: "#fff", borderBottom: `1px solid ${KB.line}` }}
+        className="px-4 py-3 flex items-center justify-between"
+      >
+        <button
+          onClick={onExit}
+          className="flex items-center gap-1 text-xs font-semibold"
+          style={{ color: KB.inkSoft }}
+        >
+          <ArrowLeft size={16} /> 역할
+        </button>
+        <Brand size="md" />
+      </header>
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="max-w-sm text-center">
+          <div
+            style={{ background: KB.goldMute }}
+            className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center"
+          >
+            <Wrench size={32} color={KB.navy} />
+          </div>
+          <h2
+            className="mt-5 text-2xl font-black"
+            style={{ color: KB.navy, letterSpacing: "-0.02em" }}
+          >
+            관리자 화면
+          </h2>
+          <p className="mt-2 text-sm" style={{ color: KB.inkSoft }}>
+            현장 통합 보드 · 작업지시 변환 · 보고서 발송<br />
+            기존 prototype의 AdminPortal을 이쪽에 연결할 예정입니다.
+          </p>
+          <div className="mt-6">
+            <BigButton onClick={onExit} tone="ghost">
+              역할 선택으로
+            </BigButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
