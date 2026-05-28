@@ -107,148 +107,6 @@ const QUICK_CHIPS = [
   "특이 컴플레인 없음",
 ];
 
-// Make Webhook URL은 운영 시 Vercel 환경변수 또는 코드 상단에 연결합니다.
-// 병원 요청과 작업자 처리완료를 분리해 두면 Google Sheets 시트를 나눠 저장하기 좋습니다.
-const MAKE_WEBHOOKS = {
-  request: "", // 요청사항_DB 저장용 Webhook
-  workResult: "", // 작업자_처리_DB 저장용 Webhook
-  photo: "", // 사진_DB 저장용 Webhook, 선택
-};
-
-const ISSUE_OPTIONS = [
-  "바닥 얼룩",
-  "머리카락",
-  "먼지",
-  "유리 얼룩",
-  "쓰레기 미처리",
-  "화장실 냄새",
-  "하수구 냄새",
-  "창틀 벌레",
-  "소모품 부족",
-  "기타",
-];
-
-const LOCATION_OPTIONS = [
-  "로비/대기실",
-  "파우더룸",
-  "화장실",
-  "원장실",
-  "진료실",
-  "출입문 유리",
-  "창틀",
-  "쓰레기장",
-  "기타",
-];
-
-const REQUEST_TIMELINE = [
-  "요청 접수",
-  "관리자 확인",
-  "작업자 전달",
-  "작업 중",
-  "처리 완료",
-  "병원 확인",
-];
-
-const RESOLUTION_OPTIONS = [
-  "청소로 해결 완료",
-  "반복 관리 필요",
-  "시설 문제 가능성",
-  "방역 필요 가능성",
-  "고객 안내 필요",
-  "관리자 확인 필요",
-];
-
-const TODAY_WORK_REQUESTS = [
-  {
-    id: "WR-001",
-    title: "파우더룸 머리카락 집중관리",
-    area: "파우더룸",
-    instruction: "바닥·선반·거울 주변 먼지와 머리카락 제거 후 처리 후 사진 필수",
-    urgency: "high",
-  },
-  {
-    id: "WR-002",
-    title: "출입문 유리 VIP 전 점검",
-    area: "5·6층 출입문 유리",
-    instruction: "유리 손자국과 햇빛 얼룩 확인. 작업 후 같은 각도 사진 등록",
-    urgency: "normal",
-  },
-  {
-    id: "WR-003",
-    title: "창틀 벌레 사체 확인",
-    area: "원장실 휴게공간 창틀",
-    instruction: "청소 가능 범위 제거. 화단·건물 원인 가능성 있으면 관리자 확인 필요 선택",
-    urgency: "normal",
-  },
-];
-
-const SHEET_SCHEMA = {
-  request: [
-    "요청ID",
-    "병원명",
-    "현장ID",
-    "요청유형",
-    "긴급도",
-    "발생위치",
-    "요청내용",
-    "사진링크",
-    "접수시간",
-    "처리상태",
-    "담당작업자",
-    "직원공유여부",
-    "처리완료시간",
-    "재요청여부",
-  ],
-  workResult: [
-    "처리ID",
-    "요청ID",
-    "병원명",
-    "작업자",
-    "발생위치",
-    "처리결과",
-    "작업전사진링크",
-    "작업후사진링크",
-    "처리메모",
-    "처리시간",
-  ],
-  photo: ["사진ID", "요청ID", "병원명", "사진구분", "사진링크", "촬영시간"],
-  monthlyReport: ["보고서ID", "병원명", "보고월", "작업횟수", "요청건수", "처리완료건수", "컴플레인건수", "반복구역", "다음달관리포인트"],
-};
-
-function makeId(prefix) {
-  return `${prefix}-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 90 + 10)}`;
-}
-
-function nowLabel() {
-  return new Date().toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" });
-}
-
-async function postToMake(kind, payload) {
-  const url = MAKE_WEBHOOKS[kind];
-  if (!url) {
-    console.log(`[Make:${kind}]`, payload);
-    return { ok: true, skipped: true };
-  }
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return { ok: res.ok };
-  } catch (error) {
-    console.error(error);
-    return { ok: false, error };
-  }
-}
-
-function buildPhotoPath({ siteName, date = new Date(), fileName }) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `KB클린 현장관리/${siteName}/${yyyy}-${mm}/${yyyy}-${mm}-${dd}/${fileName}`;
-}
-
 /* 병원 — 내 요청 mock */
 const MY_REQUESTS = [
   {
@@ -558,20 +416,9 @@ function Stepper({ step, total }) {
 /* ─────────────────────────────────────────────
    루트 — 역할 선택
    ───────────────────────────────────────────── */
-function getInitialRoleFromUrl() {
-  if (typeof window === "undefined") return null;
-  const path = window.location.pathname.toLowerCase();
-  const params = new URLSearchParams(window.location.search);
-  const roleParam = params.get("role");
-  if (path.includes("/hospital") || roleParam === "hospital") return "hospital";
-  if (path.includes("/staff") || path.includes("/worker") || roleParam === "work") return "work";
-  if (path.includes("/admin") || roleParam === "admin") return "admin";
-  return null;
-}
-
 export default function App() {
   useInjectFont();
-  const [role, setRole] = useState(() => getInitialRoleFromUrl());
+  const [role, setRole] = useState(null);
 
   return (
     <div
@@ -661,12 +508,8 @@ function RoleHome({ onPick }) {
             <Sparkles size={14} /> 데모 안내
           </div>
           <p className="mt-1.5" style={{ color: KB.inkSoft }}>
-            리투의원 데이터가 미리 채워져 있습니다. 초기 MVP는 병원용 / 작업자용 전용 링크를 분리해 운영합니다.
+            리투의원 데이터가 미리 채워져 있습니다. 실제 운영 시에는 QR로 현장·직원이 자동 인식됩니다.
           </p>
-          <div className="mt-3 grid gap-1 text-[11px] font-bold" style={{ color: KB.inkSoft }}>
-            <div>병원용: /hospital/reto?token=abc123</div>
-            <div>작업자용: /staff/reto?token=staff456</div>
-          </div>
         </div>
       </div>
     </div>
@@ -725,7 +568,6 @@ function WorkerApp({ onExit }) {
     noteMode: null, // 'none' | 'voice' | 'chips' | 'text'
     chips: [],
     text: "",
-    workResults: {}, // requestId -> { beforePhoto, afterPhoto, resolutionType, memo }
   });
 
   const update = (patch) => setState((s) => ({ ...s, ...patch }));
@@ -1129,8 +971,6 @@ function StepChecklist({ state, update, onNext }) {
         </div>
       </div>
 
-      <WorkerRequestPanel state={state} update={update} />
-
       <div className="mt-8">
         <BigButton onClick={onNext} icon={ArrowRight}>
           다음 — 필수 사진 단계로
@@ -1140,122 +980,6 @@ function StepChecklist({ state, update, onNext }) {
         </div>
       </div>
     </div>
-  );
-}
-
-
-function WorkerRequestPanel({ state, update }) {
-  const updateResult = (id, patch) => {
-    update({
-      workResults: {
-        ...state.workResults,
-        [id]: { ...(state.workResults[id] || { resolutionType: "청소로 해결 완료", memo: "" }), ...patch },
-      },
-    });
-  };
-
-  return (
-    <div className="mt-6">
-      <div
-        style={{ color: KB.inkSoft, letterSpacing: "0.15em" }}
-        className="text-[11px] font-black mb-2"
-      >
-        병원 요청 처리
-      </div>
-      <div className="space-y-3">
-        {TODAY_WORK_REQUESTS.map((req) => {
-          const r = state.workResults[req.id] || { resolutionType: "청소로 해결 완료", memo: "" };
-          const canComplete = !!r.afterPhoto;
-          return (
-            <div
-              key={req.id}
-              style={{ background: "#fff", border: `1px solid ${KB.line}` }}
-              className="rounded-2xl p-4"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <Pill tone={req.urgency === "high" ? "warn" : "line"}>{req.area}</Pill>
-                    {req.urgency === "high" && <Pill tone="bad">중요</Pill>}
-                  </div>
-                  <div className="mt-2 font-black text-sm" style={{ color: KB.navy }}>{req.title}</div>
-                  <p className="mt-1 text-xs leading-relaxed" style={{ color: KB.inkSoft }}>{req.instruction}</p>
-                </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <PhotoToggleButton
-                  active={!!r.beforePhoto}
-                  label="작업 전 사진"
-                  onClick={() => updateResult(req.id, { beforePhoto: !r.beforePhoto })}
-                />
-                <PhotoToggleButton
-                  active={!!r.afterPhoto}
-                  label="작업 후 사진"
-                  onClick={() => updateResult(req.id, { afterPhoto: !r.afterPhoto, completedAt: nowLabel() })}
-                />
-              </div>
-
-              <div className="mt-3">
-                <div className="text-[10px] font-black mb-1" style={{ color: KB.inkSoft, letterSpacing: "0.12em" }}>처리 결과</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {RESOLUTION_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => updateResult(req.id, { resolutionType: option })}
-                      style={{
-                        background: r.resolutionType === option ? KB.navy : "#fff",
-                        color: r.resolutionType === option ? "#fff" : KB.inkSoft,
-                        border: `1px solid ${r.resolutionType === option ? KB.navy : KB.line}`,
-                      }}
-                      className="px-2.5 py-1.5 rounded-full text-[11px] font-bold"
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <textarea
-                value={r.memo || ""}
-                onChange={(e) => updateResult(req.id, { memo: e.target.value })}
-                placeholder="처리 메모, 미완료 사유, 시설/방역 가능성 등을 적어주세요."
-                style={{ borderColor: KB.line, fontFamily: fontStack }}
-                className="mt-3 w-full rounded-xl border p-3 text-xs min-h-[74px] outline-none"
-              />
-
-              <button
-                disabled={!canComplete}
-                onClick={() => updateResult(req.id, { completed: true, completedAt: nowLabel() })}
-                style={{
-                  background: canComplete ? KB.ok : "#E4E2DA",
-                  color: canComplete ? "#fff" : "#999",
-                }}
-                className="mt-3 w-full rounded-xl py-3 text-sm font-black disabled:cursor-not-allowed"
-              >
-                {canComplete ? (r.completed ? "처리완료 저장됨" : "처리완료") : "작업 후 사진 필요"}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function PhotoToggleButton({ active, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: active ? KB.okSoft : "#fff",
-        border: `1.5px ${active ? "solid" : "dashed"} ${active ? KB.ok : KB.line}`,
-        color: active ? KB.ok : KB.inkSoft,
-      }}
-      className="rounded-xl py-3 text-xs font-black flex items-center justify-center gap-1.5"
-    >
-      <Camera size={15} /> {active ? `${label} 완료` : label}
-    </button>
   );
 }
 
@@ -1511,32 +1235,6 @@ function StepSummary({ state, update, onNext }) {
       const t = `${String(now.getHours()).padStart(2, "0")}:${String(
         now.getMinutes()
       ).padStart(2, "0")}`;
-      const workPayload = {
-        type: "workResultPayload",
-        처리ID: makeId("WORK"),
-        병원명: SITE.name,
-        현장ID: SITE.id,
-        작업자: SITE.staff,
-        출근시간: state.clockInAt,
-        퇴근시간: t,
-        처리시간: nowLabel(),
-        처리목록: TODAY_WORK_REQUESTS.map((req) => {
-          const result = state.workResults[req.id] || {};
-          return {
-            요청ID: req.id,
-            발생위치: req.area,
-            작업지시: req.instruction,
-            처리결과: result.resolutionType || "미입력",
-            작업전사진링크: result.beforePhoto ? buildPhotoPath({ siteName: SITE.name, fileName: `${req.area}_전.jpg` }) : "",
-            작업후사진링크: result.afterPhoto ? buildPhotoPath({ siteName: SITE.name, fileName: `${req.area}_후.jpg` }) : "",
-            처리메모: result.memo || "",
-            처리완료여부: !!result.completed,
-          };
-        }),
-        특이사항칩: state.chips,
-        특이사항텍스트: state.text,
-      };
-      postToMake("workResult", workPayload);
       update({ clockOutAt: t });
       onNext();
     }, 1000);
@@ -1684,30 +1382,6 @@ function StepDone({ onExit }) {
    ═════════════════════════════════════════════ */
 function HospitalApp({ onExit }) {
   const [tab, setTab] = useState("report"); // home, request, mine, report
-  const [hospitalRequests, setHospitalRequests] = useState(MY_REQUESTS);
-
-  const handleCreateRequest = (payload) => {
-    const item = {
-      id: payload.요청ID,
-      type: payload.요청유형,
-      urgency: payload.긴급도 === "긴급" || payload.긴급도 === "VIP" ? "high" : "normal",
-      title: `${payload.발생위치} · ${payload.문제유형 || payload.요청유형}`,
-      status: "접수됨",
-      registeredAt: payload.접수시간,
-      completedAt: "",
-      payload,
-      timeline: [
-        { label: "요청 접수", time: payload.접수시간, done: true },
-        { label: "관리자 확인", time: "대기 중", done: false },
-        { label: "작업자 전달", time: "대기 중", done: false },
-        { label: "작업 중", time: "대기 중", done: false },
-        { label: "처리 완료", time: "대기 중", done: false },
-        { label: "병원 확인", time: "대기 중", done: false },
-      ],
-    };
-    setHospitalRequests((prev) => [item, ...prev]);
-    postToMake("request", payload);
-  };
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: KB.bg }}>
@@ -1741,9 +1415,9 @@ function HospitalApp({ onExit }) {
 
       <main className="flex-1 max-w-md mx-auto w-full pb-24">
         {tab === "home" && <HospHome setTab={setTab} />}
-        {tab === "request" && <HospNewRequest setTab={setTab} onCreateRequest={handleCreateRequest} />}
-        {tab === "mine" && <HospMyRequests setTab={setTab} requests={hospitalRequests} />}
-        {tab === "report" && <HospMonthlyReport requests={hospitalRequests} />}
+        {tab === "request" && <HospNewRequest setTab={setTab} />}
+        {tab === "mine" && <HospMyRequests setTab={setTab} />}
+        {tab === "report" && <HospMonthlyReport />}
       </main>
 
       {/* 하단 탭 */}
@@ -1868,51 +1542,16 @@ function HomeQuickCard({ icon: Icon, label, sub, onClick, highlight }) {
   );
 }
 
-/* 새 요청 — 칩 선택 + Google Sheets payload 생성 */
-function HospNewRequest({ setTab, onCreateRequest }) {
+/* 새 요청 — 간단한 단일 폼 */
+function HospNewRequest({ setTab }) {
   const [form, setForm] = useState({
     type: "요청",
-    urgency: "보통",
-    issue: "",
+    urgency: "normal",
     location: "",
     body: "",
     photo: false,
   });
   const [sent, setSent] = useState(false);
-  const [payloadPreview, setPayloadPreview] = useState(null);
-
-  const canSubmit = form.issue && form.location && form.body;
-
-  const submit = () => {
-    if (!canSubmit) return;
-    const requestId = makeId("REQ");
-    const photoLink = form.photo
-      ? buildPhotoPath({ siteName: SITE.name, fileName: `${form.location}_${form.issue}.jpg` })
-      : "";
-    const payload = {
-      type: "requestPayload",
-      요청ID: requestId,
-      병원명: SITE.name,
-      현장ID: SITE.id,
-      요청유형: form.type,
-      문제유형: form.issue,
-      긴급도: form.urgency,
-      발생위치: form.location,
-      요청내용: form.body,
-      사진링크: photoLink,
-      접수시간: nowLabel(),
-      처리상태: "접수됨",
-      담당작업자: SITE.staff,
-      직원공유여부: false,
-      처리완료시간: "",
-      재요청여부: false,
-      저장대상시트: "요청사항_DB",
-      예상사진저장경로: form.photo ? photoLink : "사진 없음",
-    };
-    setPayloadPreview(payload);
-    onCreateRequest?.(payload);
-    setSent(true);
-  };
 
   if (sent) {
     return (
@@ -1927,17 +1566,8 @@ function HospNewRequest({ setTab, onCreateRequest }) {
           요청 등록 완료
         </h2>
         <p className="mt-2 text-sm" style={{ color: KB.inkSoft }}>
-          요청사항_DB로 저장할 payload가 생성되었습니다.<br />담당 매니저가 확인 후 처리상태를 업데이트합니다.
+          담당 매니저가 확인 후<br />처리 결과를 알려드립니다.
         </p>
-        {payloadPreview && (
-          <div
-            style={{ background: "#fff", border: `1px solid ${KB.line}` }}
-            className="mt-5 text-left rounded-2xl p-4 text-[11px] overflow-auto"
-          >
-            <div className="font-black mb-2" style={{ color: KB.navy }}>requestPayload</div>
-            <pre className="whitespace-pre-wrap" style={{ color: KB.inkSoft }}>{JSON.stringify(payloadPreview, null, 2)}</pre>
-          </div>
-        )}
         <div className="mt-6 max-w-xs mx-auto space-y-2">
           <BigButton onClick={() => setTab("mine")} icon={ClipboardList}>
             내 요청 확인
@@ -1958,52 +1588,55 @@ function HospNewRequest({ setTab, onCreateRequest }) {
 
       <FormField label="구분">
         <div className="grid grid-cols-2 gap-2">
-          <Choice active={form.type === "요청"} onClick={() => setForm({ ...form, type: "요청" })}>요청사항</Choice>
-          <Choice active={form.type === "컴플레인"} tone="bad" onClick={() => setForm({ ...form, type: "컴플레인" })}>컴플레인</Choice>
+          <Choice
+            active={form.type === "요청"}
+            onClick={() => setForm({ ...form, type: "요청" })}
+          >
+            요청사항
+          </Choice>
+          <Choice
+            active={form.type === "컴플레인"}
+            tone="bad"
+            onClick={() => setForm({ ...form, type: "컴플레인" })}
+          >
+            컴플레인
+          </Choice>
         </div>
-      </FormField>
-
-      <FormField label="어떤 문제가 있나요?">
-        <ChipPicker
-          options={ISSUE_OPTIONS}
-          value={form.issue}
-          onPick={(issue) => setForm({ ...form, issue })}
-        />
-      </FormField>
-
-      <FormField label="발생 위치">
-        <ChipPicker
-          options={LOCATION_OPTIONS}
-          value={form.location}
-          onPick={(location) => setForm({ ...form, location })}
-        />
-        <input
-          value={form.location}
-          onChange={(e) => setForm({ ...form, location: e.target.value })}
-          placeholder="직접 입력도 가능합니다. 예: 6층 파우더룸"
-          style={{ borderColor: KB.line, fontFamily: fontStack }}
-          className="mt-2 w-full rounded-xl border px-4 py-3 text-sm outline-none"
-        />
       </FormField>
 
       <FormField label="긴급도">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {[
-            { v: "낮음", label: "낮음" },
-            { v: "보통", label: "보통" },
-            { v: "긴급", label: "긴급" },
-            { v: "VIP", label: "VIP" },
+            { v: "normal", label: "보통" },
+            { v: "high", label: "긴급" },
+            { v: "vip", label: "VIP" },
           ].map((u) => (
-            <Choice key={u.v} active={form.urgency === u.v} onClick={() => setForm({ ...form, urgency: u.v })}>{u.label}</Choice>
+            <Choice
+              key={u.v}
+              active={form.urgency === u.v}
+              onClick={() => setForm({ ...form, urgency: u.v })}
+            >
+              {u.label}
+            </Choice>
           ))}
         </div>
+      </FormField>
+
+      <FormField label="발생 위치">
+        <input
+          value={form.location}
+          onChange={(e) => setForm({ ...form, location: e.target.value })}
+          placeholder="예: 5층 파우더룸"
+          style={{ borderColor: KB.line, fontFamily: fontStack }}
+          className="w-full rounded-xl border px-4 py-3 text-sm outline-none"
+        />
       </FormField>
 
       <FormField label="내용">
         <textarea
           value={form.body}
           onChange={(e) => setForm({ ...form, body: e.target.value })}
-          placeholder="상황을 자유롭게 적어주세요. 예: 오전에 파우더룸 바닥에 머리카락이 보였습니다."
+          placeholder="상황을 자유롭게 적어주세요"
           style={{ borderColor: KB.line, fontFamily: fontStack }}
           className="w-full rounded-xl border px-4 py-3 text-sm outline-none min-h-[120px]"
         />
@@ -2014,55 +1647,27 @@ function HospNewRequest({ setTab, onCreateRequest }) {
           onClick={() => setForm({ ...form, photo: !form.photo })}
           style={{
             background: form.photo ? KB.goldMute : "#fff",
-            border: `1.5px ${form.photo ? "solid" : "dashed"} ${form.photo ? KB.gold : KB.line}`,
+            border: `1.5px ${form.photo ? "solid" : "dashed"} ${
+              form.photo ? KB.gold : KB.line
+            }`,
             color: KB.navy,
           }}
           className="w-full rounded-xl py-5 font-bold text-sm flex flex-col items-center gap-2"
         >
           <Camera size={24} />
-          {form.photo ? "사진 1장 첨부됨 · Google Drive 링크 저장 예정" : "사진 찍기 / 선택"}
+          {form.photo ? "사진 1장 첨부됨" : "사진 찍기 / 선택"}
         </button>
       </FormField>
 
-      <div
-        style={{ background: KB.goldMute, border: `1px solid ${KB.goldLight}` }}
-        className="rounded-xl p-3 text-xs leading-relaxed"
-      >
-        <b style={{ color: KB.navy }}>저장 구조</b>
-        <div style={{ color: KB.inkSoft }} className="mt-1">
-          요청은 요청사항_DB에 저장하고, 사진 원본은 Google Drive에 저장한 뒤 시트에는 사진 링크만 남기는 구조입니다.
-        </div>
-      </div>
-
       <div className="pt-2">
-        <BigButton onClick={submit} icon={Send} disabled={!canSubmit}>
+        <BigButton
+          onClick={() => setSent(true)}
+          icon={Send}
+          disabled={!form.body || !form.location}
+        >
           요청 전송
         </BigButton>
       </div>
-    </div>
-  );
-}
-
-function ChipPicker({ options, value, onPick }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((option) => {
-        const active = value === option;
-        return (
-          <button
-            key={option}
-            onClick={() => onPick(option)}
-            style={{
-              background: active ? KB.navy : "#fff",
-              color: active ? "#fff" : KB.inkSoft,
-              border: `1.5px solid ${active ? KB.navy : KB.line}`,
-            }}
-            className="px-3 py-2 rounded-full text-xs font-bold"
-          >
-            {option}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -2103,13 +1708,13 @@ function Choice({ active, children, onClick, tone = "navy" }) {
 }
 
 /* 내 요청 */
-function HospMyRequests({ requests = MY_REQUESTS }) {
+function HospMyRequests() {
   return (
     <div className="px-4 pt-4 space-y-3">
       <h2 className="text-xl font-black" style={{ color: KB.navy, letterSpacing: "-0.02em" }}>
         내 요청 현황
       </h2>
-      {requests.map((r) => (
+      {MY_REQUESTS.map((r) => (
         <div
           key={r.id}
           style={{ background: "#fff", border: `1px solid ${KB.line}` }}
@@ -2117,10 +1722,12 @@ function HospMyRequests({ requests = MY_REQUESTS }) {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Pill tone={r.type === "컴플레인" ? "bad" : "navy"}>{r.type}</Pill>
+              <Pill tone={r.type === "컴플레인" ? "bad" : "navy"}>
+                {r.type}
+              </Pill>
               {r.urgency === "high" && <Pill tone="warn">긴급</Pill>}
             </div>
-            <Pill tone={r.status === "완료" || r.status === "처리완료" ? "ok" : r.status === "접수됨" ? "gold" : "gold"}>{r.status}</Pill>
+            <Pill tone={r.status === "완료" ? "ok" : "gold"}>{r.status}</Pill>
           </div>
           <div className="mt-2.5 font-black text-base" style={{ color: KB.navy }}>
             {r.title}
@@ -2128,48 +1735,19 @@ function HospMyRequests({ requests = MY_REQUESTS }) {
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div>
               <div style={{ color: KB.inkMute }}>등록</div>
-              <div className="font-bold mt-0.5" style={{ color: KB.navy }}>{r.registeredAt}</div>
+              <div className="font-bold mt-0.5" style={{ color: KB.navy }}>
+                {r.registeredAt}
+              </div>
             </div>
             <div>
               <div style={{ color: KB.inkMute }}>완료</div>
-              <div className="font-bold mt-0.5" style={{ color: KB.navy }}>{r.completedAt || "처리 중"}</div>
+              <div className="font-bold mt-0.5" style={{ color: KB.navy }}>
+                {r.completedAt || "처리 중"}
+              </div>
             </div>
           </div>
-          <RequestStatusTimeline request={r} />
         </div>
       ))}
-    </div>
-  );
-}
-
-function RequestStatusTimeline({ request }) {
-  const preset = request.timeline || [
-    { label: "요청 접수", time: request.registeredAt, done: true },
-    { label: "관리자 확인", time: request.status === "처리중" || request.status === "완료" ? "확인 완료" : "대기 중", done: request.status !== "접수됨" },
-    { label: "작업자 전달", time: request.status === "처리중" || request.status === "완료" ? "전달 완료" : "대기 중", done: request.status === "처리중" || request.status === "완료" },
-    { label: "작업 중", time: request.status === "처리중" ? "진행 중" : request.status === "완료" ? "완료" : "대기 중", done: request.status === "처리중" || request.status === "완료" },
-    { label: "처리 완료", time: request.completedAt || "대기 중", done: request.status === "완료" },
-    { label: "병원 확인", time: request.status === "완료" ? "확인 가능" : "대기 중", done: request.status === "완료" },
-  ];
-  return (
-    <div className="mt-4 rounded-xl p-3" style={{ background: KB.bg, border: `1px solid ${KB.line}` }}>
-      <div className="text-[10px] font-black mb-2" style={{ color: KB.gold, letterSpacing: "0.16em" }}>처리 타임라인</div>
-      <div className="space-y-2">
-        {preset.map((step, i) => (
-          <div key={step.label} className="flex items-start gap-2 text-xs">
-            <div
-              style={{ background: step.done ? KB.navy : "#fff", border: `1.5px solid ${step.done ? KB.navy : KB.line}` }}
-              className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-            >
-              {step.done ? <Check size={12} color="#fff" strokeWidth={3} /> : <Circle size={10} color={KB.inkMute} />}
-            </div>
-            <div className="flex-1">
-              <div className="font-black" style={{ color: step.done ? KB.navy : KB.inkSoft }}>{step.label}</div>
-              <div style={{ color: KB.inkMute }}>{step.time}</div>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -2177,7 +1755,7 @@ function RequestStatusTimeline({ request }) {
 /* ─────────────────────────────────────────────
    ▒ 월간 보고서 ▒  (핵심 자산)
    ───────────────────────────────────────────── */
-function HospMonthlyReport({ requests = MY_REQUESTS }) {
+function HospMonthlyReport() {
   return (
     <div className="bg-white">
       {/* 월 선택 */}
